@@ -1,0 +1,403 @@
+// ============================================================
+// Element Plus 主题覆盖 - Ferrari 设计系统
+// 默认暗色画布 #181818 / Rosso Corsa #da291c / 锐角 / 无阴影
+// 通过 CSS 变量实现暗色（默认）/ 亮色编辑带切换
+// ============================================================
+@use './variables.scss' as *;
+
+// ============================================================
+// 默认主题：Ferrari 暗色画布（:root 即暗色）
+// ============================================================
+:root {
+  // 中性色 - Ferrari 暗色画布
+  // 层级关系：bg（最深画布）< divider < bg-gray（卡片提升层）< border（发丝线，亮于卡片才可见）< bg-gray-dark（悬停提升）
+  --lux-bg: #181818;                // 画布（近黑，略带暖意）
+  --lux-bg-gray: #242424;           // 提升层 / 卡片（较画布微亮，营造层次）
+  --lux-bg-gray-dark: #313131;      // 悬停 / 更深提升层
+  --lux-text: #ffffff;              // 展示文字（纯白）
+  --lux-text-secondary: #a8a8a8;    // 正文灰（对比度 ~7.6:1，WCAG AAA）
+  --lux-text-tertiary: #808080;     // 弱化文字（对比度 ~4.7:1，WCAG AA）
+  --lux-border: #303030;            // 发丝线（亮于卡片背景，确保可见）
+  --lux-border-light: #3a3a3a;
+  --lux-divider: #262626;           // 分割线（介于画布与卡片之间）
+
+  // 阴影 - Ferrari 极简，按层级递进（替换原全部相同的 0 4px 8px）
+  --lux-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --lux-shadow-base: 0 2px 6px rgba(0, 0, 0, 0.10);
+  --lux-shadow-md: 0 4px 10px rgba(0, 0, 0, 0.12);
+  --lux-shadow-lg: 0 6px 16px rgba(0, 0, 0, 0.16);
+  --lux-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.12);
+
+  // 头部背景
+  --lux-header-bg: rgba(24, 24, 24, 0.92);
+  // 输入框聚焦背景
+  --lux-input-focus-bg: #242424;
+  // 滚动条
+  --lux-scrollbar-thumb: #3a3a3a;
+  // 品牌红文字色（用于暗色背景上的红色文字，提亮以保证对比度 ≥ 4.5:1）
+  --lux-primary-text: #ff6b5e;
+
+  // ---------- Element Plus 主色覆盖（Rosso Corsa）----------
+  // 使用 !important 确保覆盖 Element Plus 自动导入的组件 CSS（后注入）
+  --el-color-primary: #{$color-primary} !important;
+  --el-color-primary-light-3: #e44a3c !important;
+  --el-color-primary-light-5: #ed948e !important;
+  --el-color-primary-light-7: #f4bfbb !important;
+  --el-color-primary-light-8: #f8d4d2 !important;
+  --el-color-primary-light-9: #fbeae8 !important;
+  --el-color-primary-dark-2: #{$color-primary-active} !important;
+
+  // 功能色
+  --el-color-success: #{$color-success} !important;
+  --el-color-warning: #{$color-warning} !important;
+  --el-color-danger: #{$color-danger} !important;
+  --el-color-info: #{$color-info} !important;
+
+  // 文字
+  --el-text-color-primary: var(--lux-text);
+  --el-text-color-regular: var(--lux-text);
+  --el-text-color-secondary: var(--lux-text-secondary);
+  --el-text-color-placeholder: var(--lux-text-tertiary);
+  --el-text-color-disabled: var(--lux-text-tertiary);
+
+  // 边框（发丝线）
+  --el-border-color: var(--lux-border);
+  --el-border-color-light: var(--lux-border-light);
+  --el-border-color-lighter: var(--lux-divider);
+  --el-border-color-dark: var(--lux-border);
+
+  // 背景
+  --el-bg-color: var(--lux-bg);
+  --el-bg-color-page: var(--lux-bg);
+  --el-bg-color-overlay: var(--lux-bg-gray) !important;
+  --el-fill-color-blank: var(--lux-bg);
+  --el-fill-color: var(--lux-bg-gray);
+  --el-fill-color-light: var(--lux-bg-gray);
+  --el-fill-color-lighter: var(--lux-bg);
+  --el-fill-color-dark: var(--lux-bg-gray-dark);
+  --el-mask-color: rgba(0, 0, 0, 0.7);
+  --el-overlay-color-lighter: rgba(0, 0, 0, 0.6);
+
+  // 圆角 - Ferrari 锐角
+  --el-border-radius-base: #{$radius-sm};
+  --el-border-radius-small: #{$radius-xs};
+  --el-border-radius-round: #{$radius-full};
+
+  // 字体
+  --el-font-family: #{$font-family};
+  --el-font-size-base: #{$font-size-base};
+
+  // 阴影
+  --el-box-shadow: var(--lux-shadow-sm);
+  --el-box-shadow-light: var(--lux-shadow-sm);
+  --el-box-shadow-lighter: none;
+  --el-box-shadow-dark: var(--lux-shadow-md);
+}
+
+// ============================================================
+// 亮色编辑带模式（html.light 触发）
+// Ferrari 在特定编辑上下文使用白色画布
+// ============================================================
+html.light {
+  // 层级关系：bg（白画布）> bg-gray（卡片微灰）> divider > bg-gray-dark（悬停）
+  --lux-bg: #ffffff;
+  --lux-bg-gray: #f5f5f5;            // 卡片提升层（略灰于画布，分离清晰）
+  --lux-bg-gray-dark: #e8e8e8;       // 悬停 / 更深提升层
+  --lux-text: #1a1a1a;               // 主文字（近黑，较纯黑柔和）
+  --lux-text-secondary: #595959;     // 正文灰（对比度 ~7:1，WCAG AAA）
+  --lux-text-tertiary: #767676;      // 弱化文字（对比度 ~4.6:1，WCAG AA）
+  --lux-border: #d9d9d9;             // 发丝线（深于卡片背景，确保可见）
+  --lux-border-light: #ececec;
+  --lux-divider: #ececec;            // 分割线
+
+  // 阴影 - 亮色模式下更克制（透明度更低）
+  --lux-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --lux-shadow-base: 0 2px 6px rgba(0, 0, 0, 0.06);
+  --lux-shadow-md: 0 4px 10px rgba(0, 0, 0, 0.08);
+  --lux-shadow-lg: 0 6px 16px rgba(0, 0, 0, 0.10);
+  --lux-shadow-hover: 0 4px 12px rgba(0, 0, 0, 0.08);
+
+  --lux-header-bg: rgba(255, 255, 255, 0.92);
+  --lux-input-focus-bg: #ffffff;
+  --lux-scrollbar-thumb: #d9d9d9;
+  // 亮色模式下品牌红文字对比度足够，使用原色
+  --lux-primary-text: #{$color-primary};
+
+  --el-bg-color: var(--lux-bg);
+  --el-bg-color-page: var(--lux-bg-gray);
+  --el-bg-color-overlay: var(--lux-bg);
+  --el-fill-color-blank: var(--lux-bg);
+  --el-fill-color: var(--lux-bg-gray);
+  --el-fill-color-light: var(--lux-bg-gray);
+  --el-fill-color-lighter: var(--lux-bg);
+  --el-fill-color-dark: var(--lux-bg-gray-dark);
+  --el-text-color-primary: var(--lux-text);
+  --el-text-color-regular: var(--lux-text);
+  --el-text-color-secondary: var(--lux-text-secondary);
+  --el-text-color-placeholder: var(--lux-text-tertiary);
+  --el-border-color: var(--lux-border);
+  --el-border-color-light: var(--lux-border-light);
+  --el-border-color-lighter: var(--lux-divider);
+}
+
+// 兼容旧 html.dark 类（视为默认暗色，无需额外处理）
+html.dark {
+  // 与 :root 相同，确保主题切换组件正常工作
+}
+
+// ============================================================
+// 组件级样式覆盖 - Ferrari 风格
+// ============================================================
+
+// Button - 锐角 / 大写字距 / 无阴影上浮
+.el-button {
+  font-weight: $font-weight-bold;
+  border-radius: $radius-none !important;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  transition: background-color $transition-fast, border-color $transition-fast;
+  &--primary {
+    background-color: $color-primary !important;
+    border-color: $color-primary !important;
+    color: #fff !important;
+    --el-button-bg-color: #{$color-primary} !important;
+    --el-button-border-color: #{$color-primary} !important;
+    --el-button-text-color: #fff !important;
+    --el-button-hover-bg-color: #{$color-primary-light} !important;
+    --el-button-hover-border-color: #{$color-primary-light} !important;
+    --el-button-hover-text-color: #fff !important;
+    --el-button-active-bg-color: #{$color-primary-active} !important;
+    --el-button-active-border-color: #{$color-primary-active} !important;
+    --el-button-active-text-color: #fff !important;
+    &:hover {
+      background-color: $color-primary-light !important;
+      border-color: $color-primary-light !important;
+      color: #fff !important;
+    }
+    &:active {
+      background-color: $color-primary-active !important;
+      border-color: $color-primary-active !important;
+      color: #fff !important;
+    }
+  }
+  &--danger {
+    color: #fff !important;
+    --el-button-text-color: #fff !important;
+    --el-button-hover-text-color: #fff !important;
+    --el-button-active-text-color: #fff !important;
+  }
+  &--success {
+    color: #fff !important;
+    --el-button-text-color: #fff !important;
+    --el-button-hover-text-color: #fff !important;
+    --el-button-active-text-color: #fff !important;
+  }
+  &--warning {
+    color: #fff !important;
+    --el-button-text-color: #fff !important;
+    --el-button-hover-text-color: #fff !important;
+    --el-button-active-text-color: #fff !important;
+  }
+  &.is-round { border-radius: $radius-none !important; }
+  &.is-text, &.is-link {
+    &:hover { background: transparent; color: $color-primary; }
+  }
+}
+
+// Input - 暗色画布 / 发丝线边框 / 4px 圆角
+.el-input__wrapper {
+  background-color: var(--lux-bg);
+  box-shadow: 0 0 0 1px var(--lux-border) inset !important;
+  border-radius: $radius-sm;
+  transition: box-shadow $transition-fast;
+  &:hover {
+    box-shadow: 0 0 0 1px var(--lux-text-tertiary) inset !important;
+  }
+  &.is-focus {
+    background-color: var(--lux-bg);
+    box-shadow: 0 0 0 1px $color-primary inset !important;
+  }
+}
+
+// Textarea 同步
+.el-textarea__inner {
+  background-color: var(--lux-bg);
+  box-shadow: 0 0 0 1px var(--lux-border) inset;
+  border-radius: $radius-sm;
+  &:focus {
+    box-shadow: 0 0 0 1px $color-primary inset;
+  }
+}
+
+// Select 触发器同步
+.el-select__wrapper {
+  background-color: var(--lux-bg);
+  box-shadow: 0 0 0 1px var(--lux-border) inset !important;
+  border-radius: $radius-sm;
+  &:hover {
+    box-shadow: 0 0 0 1px var(--lux-text-tertiary) inset !important;
+  }
+  &.is-focused {
+    box-shadow: 0 0 0 1px $color-primary inset !important;
+  }
+}
+
+// Card - 锐角 / 无边框 / 发丝线
+.el-card {
+  border: 1px solid var(--lux-border);
+  border-radius: $radius-none;
+  box-shadow: none;
+  background-color: var(--lux-bg-gray);
+}
+
+// Dialog - 12px 圆角（Ferrari 模态例外）
+.el-dialog {
+  border-radius: $radius-md;
+  overflow: hidden;
+  background-color: var(--lux-bg);
+  border: 1px solid var(--lux-border);
+}
+
+// Descriptions
+.el-descriptions {
+  --el-descriptions-item-bordered-label-background: var(--lux-bg-gray);
+  // 标签文字加粗，提升与内容的对比层次
+  .el-descriptions__label { font-weight: $font-weight-medium; color: var(--lux-text); }
+  .el-descriptions__content { color: var(--lux-text); }
+}
+
+// 表格 - 确保黑白两种主题下文字、表头、边框对比明显
+.el-table {
+  --el-table-border-color: var(--lux-border);
+  --el-table-header-bg-color: var(--lux-bg-gray);
+  --el-table-header-text-color: var(--lux-text);
+  --el-table-text-color: var(--lux-text);
+  --el-table-bg-color: transparent;
+  --el-table-tr-bg-color: transparent;
+  --el-table-row-hover-bg-color: var(--lux-bg-gray);
+  // 表头文字加粗，增强层次
+  th.el-table__cell {
+    font-weight: $font-weight-medium;
+    color: var(--lux-text);
+  }
+}
+
+// Tabs - 下划线指示器用 Rosso Corsa
+.el-tabs {
+  --el-tabs-header-height: 48px;
+  &__item {
+    font-weight: $font-weight-medium;
+    color: var(--lux-text-secondary);
+    &.is-active { color: var(--lux-text); }
+  }
+  &__active-bar {
+    background-color: $color-primary;
+  }
+}
+
+// Pagination
+.el-pagination {
+  --el-pagination-button-color: var(--lux-text-secondary);
+  --el-pagination-hover-color: #{$color-primary};
+  --el-pagination-button-bg-color: transparent;
+}
+
+// Dropdown 触发器：移除 hover 时浏览器默认 focus 轮廓（避免出现"框框"闪烁）
+.el-dropdown {
+  // 触发器容器及其内部元素在鼠标 hover 触发的 focus 状态下不显示 outline
+  .el-tooltip__trigger,
+  .el-tooltip__trigger:focus,
+  .el-tooltip__trigger:focus-visible,
+  // 兼容直接挂在触发器上的 focus
+  > *:focus,
+  > *:focus-visible {
+    outline: none !important;
+  }
+  // 触发器内部的具体元素（nav-link / user-info 等）
+  :focus,
+  :focus-visible {
+    outline: none;
+  }
+}
+
+// Dropdown 菜单（teleport 到 body，需 !important 防止 Element Plus 基础样式覆盖导致文字不可见）
+.el-dropdown-menu {
+  background-color: var(--lux-bg-gray) !important;
+  border: 1px solid var(--lux-border) !important;
+  border-radius: $radius-none !important;
+  .el-dropdown-menu__item {
+    color: var(--lux-text) !important;
+    &:hover, &:focus {
+      background-color: var(--lux-bg-gray-dark) !important;
+      color: $color-primary !important;
+    }
+    // 禁用态
+    &.is-disabled {
+      color: var(--lux-text-tertiary) !important;
+    }
+  }
+  // 分隔线
+  .el-dropdown-menu__item--divided {
+    border-top-color: var(--lux-border) !important;
+  }
+}
+
+// DatePicker 面板
+.el-date-editor.el-input__wrapper {
+  background-color: var(--lux-bg);
+}
+
+// Select 下拉面板（同样 teleport 到 body）
+.el-select-dropdown {
+  background-color: var(--lux-bg-gray) !important;
+  border: 1px solid var(--lux-border) !important;
+  .el-select-dropdown__item {
+    color: var(--lux-text) !important;
+    &.is-hovering, &:hover {
+      background-color: var(--lux-bg-gray-dark) !important;
+    }
+    &.is-selected {
+      color: $color-primary !important;
+      font-weight: $font-weight-medium;
+    }
+  }
+}
+
+// DatePicker 下拉面板
+.el-picker-panel {
+  background-color: var(--lux-bg-gray) !important;
+  color: var(--lux-text) !important;
+  border-color: var(--lux-border) !important;
+  .el-date-table th { color: var(--lux-text-secondary) !important; }
+  .el-date-table td .el-date-table-cell__text { color: var(--lux-text) !important; }
+  .el-date-table td.next-month .el-date-table-cell__text,
+  .el-date-table td.prev-month .el-date-table-cell__text { color: var(--lux-text-tertiary) !important; }
+}
+
+// MessageBox / Message
+// ElMessageBox / ElMessage 仅覆盖主题色，定位与尺寸使用 Element Plus 默认行为
+.el-message-box {
+  border-radius: $radius-md;
+  background-color: var(--lux-bg);
+  border: 1px solid var(--lux-border);
+}
+.el-message {
+  border-radius: $radius-sm;
+}
+
+// Avatar - 确保文字（姓氏）始终在头像正中间
+.el-avatar {
+  // 默认无图头像的背景色（暗色画布下的提升层）
+  --el-avatar-bg-color: var(--lux-bg-gray-dark);
+  --el-avatar-text-color: var(--lux-text);
+  // 强制 flex 居中，防止被外部 display:block 等覆盖导致文字偏移到顶部
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: $font-weight-medium;
+}
+
+// 暗色滚动条
+::-webkit-scrollbar-thumb {
+  background: var(--lux-scrollbar-thumb);
+}

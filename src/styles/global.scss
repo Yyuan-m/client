@@ -1,0 +1,158 @@
+// ============================================================
+// 全局通用样式 - Ferrari 设计系统
+// ============================================================
+
+@use './reset.scss';
+@use './element-theme.scss';
+@use './animations.scss';
+
+// 通用容器
+.container {
+  @include content-container;
+}
+
+// 区块通用间距 - Ferrari 编辑节奏
+.section {
+  padding: $space-2xl 0;
+  @include respond-to('md') {
+    padding: $space-xl 0;
+  }
+}
+
+// 区块标题 - Ferrari 展示字（500 权重，非加粗）
+.section-title {
+  font-size: $font-size-2xl;
+  font-weight: $font-weight-medium;
+  text-align: center;
+  margin-bottom: $space-sm;
+  letter-spacing: -0.36px;
+  @include respond-to('md') {
+    font-size: $font-size-xl;
+  }
+}
+
+.section-subtitle {
+  font-size: $font-size-md;
+  color: $color-text-secondary;
+  text-align: center;
+  margin-bottom: $space-lg;
+  font-weight: $font-weight-regular;
+}
+
+// 文字工具类
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-primary { color: var(--lux-primary-text); }
+.text-accent { color: var(--lux-primary-text); }
+.text-secondary { color: $color-text-secondary; }
+.text-danger { color: $color-danger; }
+.text-success { color: $color-success; }
+
+// 字号工具类
+.text-xs { font-size: $font-size-xs; }
+.text-sm { font-size: $font-size-sm; }
+.text-base { font-size: $font-size-base; }
+.text-lg { font-size: $font-size-lg; }
+.text-xl { font-size: $font-size-xl; }
+.text-2xl { font-size: $font-size-2xl; }
+
+// 间距工具类
+@each $name, $size in (xxxs: $space-xxxs, xxs: $space-xxs, xs: $space-xs, sm: $space-sm, base: $space-base, md: $space-md, lg: $space-lg, xl: $space-xl) {
+  .mt-#{$name} { margin-top: $size; }
+  .mb-#{$name} { margin-bottom: $size; }
+  .ml-#{$name} { margin-left: $size; }
+  .mr-#{$name} { margin-right: $size; }
+  .pt-#{$name} { padding-top: $size; }
+  .pb-#{$name} { padding-bottom: $size; }
+  .pl-#{$name} { padding-left: $size; }
+  .pr-#{$name} { padding-right: $size; }
+}
+
+// flex 工具
+.flex { display: flex; }
+.flex-center { display: flex; align-items: center; justify-content: center; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+.flex-col { display: flex; flex-direction: column; }
+.flex-1 { flex: 1; }
+.items-center { align-items: center; }
+.gap-xs { gap: $space-xs; }
+.gap-sm { gap: $space-sm; }
+.gap-base { gap: $space-base; }
+.gap-md { gap: $space-md; }
+.gap-lg { gap: $space-lg; }
+
+// ---------- CTA 按钮（Ferrari 锐角主色）----------
+.btn-fill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 32px;
+  height: 48px;
+  border-radius: $radius-none;
+  @include cta-type;
+  color: #fff;
+  background: $color-primary;
+  border: none;
+  transition: background-color $transition-fast, color $transition-fast;
+  // router-link 渲染为 <a>，会被 reset.scss 的 a:hover{color:$color-primary} 覆盖，
+  // 此处强制保持白色，避免 light 模式下 hover 字体变红
+  &:hover {
+    background: $color-primary-light;
+    color: #fff;
+  }
+  &:active {
+    background: $color-primary-active;
+    color: #fff;
+  }
+}
+
+// ---------- CTA 按钮（暗色画布线框）----------
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 13px 31px;
+  height: 48px;
+  border-radius: $radius-none;
+  @include cta-type;
+  color: $color-text;
+  background: transparent;
+  border: 1px solid $color-text;
+  transition: all $transition-fast;
+  &:hover {
+    border-color: $color-primary;
+    color: $color-primary;
+  }
+}
+
+// ---------- 标签（Ferrari 胶囊徽章）----------
+.tag {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: $radius-full;
+  font-size: 11px;
+  font-weight: $font-weight-semibold;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  background: var(--lux-bg-gray);
+  color: $color-text;
+}
+.tag-primary {
+  background: rgba(218, 41, 28, 0.15);
+  color: $color-primary;
+}
+
+// ---------- 分割线（发丝线）----------
+.divider {
+  width: 100%;
+  height: 1px;
+  background: $color-divider;
+}
+
+// ---------- 价格强调 ----------
+.price {
+  color: var(--lux-primary-text);
+  font-weight: $font-weight-medium;
+  .unit { font-size: $font-size-sm; font-weight: $font-weight-regular; }
+  .amount { font-size: $font-size-xl; }
+}

@@ -1,0 +1,67 @@
+// ============================================================
+// 全局动效样式 - Ferrari 设计系统
+// ============================================================
+@use './variables.scss' as *;
+
+// 页面区块滚动渐显
+.fade-in-up {
+  opacity: 0;
+  transform: translateY(30px);
+  transition: opacity $transition-slow, transform $transition-slow;
+  &.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// 路由切换淡入
+.page-fade-enter-active,
+.page-fade-leave-active {
+  transition: opacity $transition-base;
+}
+.page-fade-enter-from {
+  opacity: 0;
+}
+.page-fade-leave-to {
+  opacity: 0;
+}
+
+// 弹窗平滑缩放
+.modal-scale-enter-active,
+.modal-scale-leave-active {
+  transition: all $transition-bounce;
+}
+.modal-scale-enter-from,
+.modal-scale-leave-to {
+  opacity: 0;
+  transform: scale(0.92);
+}
+
+// 卡片 hover - Ferrari 无阴影，仅极弱亮度提升
+.hover-float {
+  transition: transform $transition-base;
+  &:hover {
+    transform: translateY(-4px);
+  }
+}
+
+// 呼吸动画（用于加载/占位）
+@keyframes breathe {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+.breathe {
+  animation: breathe 1.6s ease-in-out infinite;
+}
+
+// 骨架屏 shimmer - Ferrari 暗色
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--lux-bg-gray) 25%, var(--lux-bg-gray-dark) 50%, var(--lux-bg-gray) 75%);
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite linear;
+  border-radius: $radius-sm;
+}

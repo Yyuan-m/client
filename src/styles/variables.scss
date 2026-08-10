@@ -1,0 +1,154 @@
+// ============================================================
+// LUXURY CAR 用户端 · 全局 SCSS 变量
+// 设计语言：Ferrari 设计系统 —— 电影级暗色编辑风格
+// 近黑画布 #181818 / Rosso Corsa #da291c / 锐角 / 无阴影
+// ============================================================
+
+// ---------- 品牌主色（Rosso Corsa 法拉利红）----------
+$color-primary: #da291c;
+$color-primary-active: #b01e0a;   // 按压态
+$color-primary-hover: #9d2211;    // 悬停态（文档记录，设计不用悬停）
+$color-primary-light: #e44a3c;    // 浅化用于 hover 反馈
+
+// ---------- 辅助色（保留极少量，仅用于语义）----------
+$color-accent: #da291c;           // 统一使用 Rosso Corsa
+$color-accent-light: #e44a3c;
+$color-accent-dark: #b01e0a;
+
+// ---------- 中性色（通过 CSS 变量实现暗色/亮色切换）----------
+// Ferrari 默认暗色画布 #181818（非纯黑，略带暖意）
+$color-bg: var(--lux-bg);
+$color-bg-gray: var(--lux-bg-gray);          // 提升层 / 卡片背景
+$color-bg-gray-dark: var(--lux-bg-gray-dark);
+$color-text: var(--lux-text);                // 主文字
+$color-text-secondary: var(--lux-text-secondary);
+$color-text-tertiary: var(--lux-text-tertiary);
+$color-border: var(--lux-border);            // 发丝线
+$color-border-light: var(--lux-border-light);
+$color-divider: var(--lux-divider);
+
+// ---------- 功能色 ----------
+$color-success: #03904a;
+$color-warning: #f13a2c;
+$color-danger: #f13a2c;
+$color-info: #4c98b9;
+
+// ---------- 圆角（Ferrari 锐角为主，仅徽章用胶囊）----------
+$radius-none: 0px;       // CTA / 卡片 / 区块 —— 默认锐角
+$radius-xs: 2px;         // 紧凑徽章（极少）
+$radius-sm: 4px;         // 表单输入
+$radius-base: 4px;       // 兼容旧引用
+$radius-md: 6px;         // 紧凑卡片（极少）
+$radius-lg: 0px;         // 兼容旧引用 → 锐角
+$radius-xl: 0px;         // 兼容旧引用 → 锐角
+$radius-full: 9999px;    // 仅徽章 / 头像
+
+// ---------- 间距体系（8px 基准梯）----------
+$space-xxxs: 4px;
+$space-xxs: 8px;
+$space-xs: 16px;
+$space-sm: 24px;
+$space-base: 16px;       // 兼容旧引用
+$space-md: 32px;
+$space-lg: 48px;
+$space-xl: 64px;
+$space-2xl: 96px;
+$space-3xl: 128px;       // 兼容旧引用
+
+// ---------- 字体（Inter 替代 FerrariSans）----------
+$font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display',
+  'Helvetica Neue', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+$font-size-xs: 12px;
+$font-size-sm: 13px;
+$font-size-base: 14px;
+$font-size-md: 16px;
+$font-size-lg: 18px;
+$font-size-xl: 26px;
+$font-size-2xl: 36px;
+$font-size-3xl: 56px;
+$font-size-4xl: 80px;
+
+$font-weight-light: 300;
+$font-weight-regular: 400;
+$font-weight-medium: 500;     // 展示字默认权重
+$font-weight-semibold: 600;
+$font-weight-bold: 700;
+
+// 行高
+$line-height-tight: 1.2;
+$line-height-base: 1.5;
+$line-height-loose: 1.75;
+
+// ---------- 阴影（Ferrari 无阴影，仅保留极弱悬停）----------
+$shadow-sm: var(--lux-shadow-sm);
+$shadow-base: var(--lux-shadow-base);
+$shadow-md: var(--lux-shadow-md);
+$shadow-lg: var(--lux-shadow-lg);
+$shadow-hover: var(--lux-shadow-hover);
+
+// ---------- 动效 ----------
+$transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+$transition-base: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+$transition-slow: 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+$transition-bounce: 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+// ---------- 布局 ----------
+$content-max-width: 1280px;     // Ferrari 编辑内容最大宽度
+$header-height: 64px;
+$footer-height: auto;
+
+// ---------- z-index 层级 ----------
+$z-header: 100;
+$z-dropdown: 200;
+$z-backtop: 50;
+$z-modal: 1000;
+
+// ---------- Mixin：响应式断点（Ferrari 断点）----------
+@mixin respond-to($breakpoint) {
+  @if $breakpoint == 'sm' { @media (max-width: 640px) { @content; } }
+  @else if $breakpoint == 'md' { @media (max-width: 1024px) { @content; } }
+  @else if $breakpoint == 'lg' { @media (max-width: 1280px) { @content; } }
+  @else if $breakpoint == 'xl' { @media (max-width: 1440px) { @content; } }
+}
+
+// ---------- Mixin：内容容器居中 ----------
+@mixin content-container {
+  width: 100%;
+  max-width: $content-max-width;
+  margin: 0 auto;
+  padding: 0 $space-md;
+  box-sizing: border-box;
+}
+
+// ---------- Mixin：单行省略 ----------
+@mixin ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// ---------- Mixin：多行省略 ----------
+@mixin ellipsis-multi($lines: 2) {
+  display: -webkit-box;
+  -webkit-line-clamp: $lines;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+// ---------- Mixin：CTA 大写字距 ----------
+@mixin cta-type {
+  font-size: $font-size-base;
+  font-weight: $font-weight-bold;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+// ---------- Mixin：导航链接大写字距 ----------
+@mixin nav-link-type {
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  letter-spacing: 0.65px;
+  text-transform: uppercase;
+  line-height: 1.4;
+}
