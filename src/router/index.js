@@ -16,6 +16,8 @@ const routes = [
       { path: 'vehicles/:id', name: 'VehicleDetail', component: () => import('@/views/vehicle/detail.vue'), meta: { title: '车辆详情' } },
       { path: 'about', name: 'About', component: () => import('@/views/about/index.vue'), meta: { title: '关于我们' } },
       { path: 'contact', name: 'Contact', component: () => import('@/views/contact/index.vue'), meta: { title: '联系客服' } },
+      { path: 'announcements', name: 'AnnouncementList', component: () => import('@/views/announcement/index.vue'), meta: { title: '公告' } },
+      { path: 'announcements/:id', name: 'AnnouncementDetail', component: () => import('@/views/announcement/detail.vue'), meta: { title: '公告详情' } },
       { path: 'cart', name: 'Cart', component: () => import('@/views/cart/index.vue'), meta: { title: '租车购物车' } }
     ]
   },

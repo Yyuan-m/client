@@ -150,6 +150,7 @@ export const useCartStore = defineStore(
     }
 
     // ---------- 移除单项 ----------
+    // 提示由调用方（组件层）负责，避免与组件内的成功提示重复弹窗
     async function removeItem(carId) {
       const item = items.value.find((i) => i.carId === carId)
       items.value = items.value.filter((i) => i.carId !== carId)
@@ -164,7 +165,6 @@ export const useCartStore = defineStore(
         }
       }
       await refreshPrices()
-      ElMessage.success('已移除')
     }
 
     // ---------- 更新某车租期 ----------
@@ -215,6 +215,7 @@ export const useCartStore = defineStore(
     }
 
     // ---------- 清空 ----------
+    // 提示由调用方（组件层）负责，避免与组件内的成功提示重复弹窗
     async function clear() {
       const prev = [...items.value]
       items.value = []
@@ -229,7 +230,6 @@ export const useCartStore = defineStore(
           throw e
         }
       }
-      ElMessage.success('购物车已清空')
     }
 
     // ---------- 判断是否已在购物车 ----------

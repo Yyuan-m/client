@@ -33,6 +33,23 @@ body {
   scrollbar-gutter: stable;
 }
 
+// ---------- 弹窗锁滚动补偿（修复弹窗打开时 header 右移）----------
+// Element Plus 弹窗（dialog / message-box / image-viewer / tour 等）打开时会锁定
+// body 滚动：给 body 添加 `<ns>-parent--hidden` 类并隐藏滚动条，同时尝试用
+// body 宽度 calc(100% - 滚动条宽) 补偿。该补偿对 fixed 元素（如 AppHeader）无效：
+// fixed 元素宽度跟随 viewport，滚动条消失后 header 变宽、内容居中基准右移，
+// 视觉上 header 整体向右偏移。
+// 此处改为强制保持滚动条显示：弹窗态下 body 仍 overflow-y:scroll，滚动条槽位
+// 恒定，header 宽度恒定，无横向位移。背景理论可滚动，但弹窗遮罩挡住背景，
+// 实际无影响；overscroll-behavior:contain 减少滚动穿透。
+body[class*='parent--hidden'] {
+  width: auto !important;
+  padding-right: 0 !important;
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+}
+
 // 标题 - Ferrari 展示字权重 500（非加粗）
 h1, h2, h3, h4, h5, h6 {
   font-weight: $font-weight-medium;

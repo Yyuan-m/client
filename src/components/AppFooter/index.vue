@@ -48,7 +48,7 @@
       </div>
 
       <div class="footer-bottom">
-        <p>© {{ new Date().getFullYear() }} {{ config?.siteName || 'LUXURY CAR' }} {{ config?.siteSubtitle || '豪华汽车租赁' }}. All rights reserved.</p>
+        <p>© {{ new Date().getFullYear() }} {{ config?.siteName || 'LUXURY CAR' }} {{ config?.siteSubtitle || '大圣玩车' }}. All rights reserved.</p>
       </div>
     </div>
   </footer>

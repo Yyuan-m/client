@@ -22,13 +22,13 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { dateUtil } from '@/utils'
 
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   minDays: { type: Number, default: 1 },
-  maxDays: { type: Number, default: 30 },
+  maxDays: { type: Number, default: 20 },
   // 最早可租日期（YYYY-MM-DD 字符串或 Date）：用于已出租/已预约车辆，禁用该日期之前的所有日期
   minDate: { type: [String, Date], default: null }
 })
@@ -38,6 +38,27 @@ const emit = defineEmits(['update:modelValue', 'change'])
 const dateRange = ref(props.modelValue)
 const days = ref(0)
 const error = ref('')
+
+// 快捷选项：根据 minDays 动态过滤，低于起租天数的选项不展示
+const shortcuts = computed(() => {
+  const all = [
+    { text: '3天', days: 3 },
+    { text: '7天', days: 7 },
+    { text: '15天', days: 15 },
+    { text: '20天', days: 20 }
+  ]
+  return all
+    .filter(s => s.days >= props.minDays && s.days <= props.maxDays)
+    .map(s => ({
+      text: s.text,
+      value: () => {
+        const start = parseMinDate() || new Date()
+        const end = new Date(start)
+        end.setDate(start.getDate() + s.days)
+        return [start, end]
+      }
+    }))
+})
 
 // 解析 minDate 为当天 0 点的 Date；无效时返回 null
 function parseMinDate() {
@@ -60,36 +81,7 @@ const disabledDate = (date) => {
   return false
 }
 
-// 快捷选项（起点尊重 minDate：已出租车辆从最早可租日开始计算）
-const shortcuts = [
-  {
-    text: '3天',
-    value: () => {
-      const s = parseMinDate() || new Date()
-      const e = new Date(s)
-      e.setDate(s.getDate() + 3)
-      return [s, e]
-    }
-  },
-  {
-    text: '7天',
-    value: () => {
-      const s = parseMinDate() || new Date()
-      const e = new Date(s)
-      e.setDate(s.getDate() + 7)
-      return [s, e]
-    }
-  },
-  {
-    text: '15天',
-    value: () => {
-      const s = parseMinDate() || new Date()
-      const e = new Date(s)
-      e.setDate(s.getDate() + 15)
-      return [s, e]
-    }
-  }
-]
+// 快捷选项已改为 computed（见上方 shortcuts），根据 minDays 动态过滤
 
 function onChange(val) {
   if (!val || val.length < 2) {

@@ -2,21 +2,94 @@
   <div class="home-page">
     <!-- 1. 顶部轮播 -->
     <section class="hero-carousel">
-      <el-carousel height="100vh" :interval="5000" arrow="never" indicator-position="none">
-        <el-carousel-item v-for="item in carousel" :key="item.id">
-          <div class="carousel-item" :style="{ backgroundImage: `url(${item.imageUrl})` }">
+      <el-carousel
+        ref="carouselRef"
+        height="100vh"
+        :autoplay="false"
+        arrow="never"
+        indicator-position="none"
+        @change="onCarouselChange"
+      >
+        <el-carousel-item v-for="(item) in carousel" :key="item.id">
+          <div class="carousel-item" :style="{ backgroundImage: `url(${resolveAdminImage(item.imageUrl)})` }">
             <div class="carousel-overlay"></div>
             <div class="carousel-content">
               <h1 class="carousel-title">{{ item.title }}</h1>
               <p class="carousel-desc">{{ item.description }}</p>
-              <router-link :to="item.linkUrl || '/vehicles'" class="btn-fill carousel-btn">立即体验</router-link>
+              <!-- <button class="btn-fill carousel-btn" @click="handleCarouselClick(item)">立即体验</button> -->
             </div>
           </div>
         </el-carousel-item>
       </el-carousel>
+
+      <!-- 自定义控制器：默认小圆点；鼠标移到任意圆点即切换并展开为时间条，按 5 秒动态填充进度；悬停期间暂停自动切换 -->
+      <div v-if="carousel.length" class="carousel-indicators" @mouseleave="onIndicatorsLeave">
+        <button
+          v-for="(item, idx) in carousel"
+          :key="item.id"
+          class="carousel-dot"
+          :class="{ 'is-active': idx === activeCarouselIndex, 'is-hover': idx === hoverDotIndex }"
+          @mouseenter="onDotEnter(idx)"
+          :aria-label="`切换到第 ${idx + 1} 张`"
+        >
+          <span class="dot-fill" :style="{ width: getDotFillWidth(idx) + '%' }"></span>
+        </button>
+      </div>
+
       <div class="scroll-hint">
         <span>向下滚动探索</span>
         <el-icon><ArrowDownBold /></el-icon>
+      </div>
+    </section>
+
+    <!-- 1.5 我的订单（仅登录用户，租赁中 + 待评价） -->
+    <section v-if="userStore.isLoggedIn" class="section my-orders fade-in-up">
+      <div class="container">
+        <div class="my-orders-head">
+          <h2 class="section-title">我的订单</h2>
+          <el-button type="primary" text @click="router.push('/orders')">全部订单 →</el-button>
+        </div>
+        <p class="section-subtitle">进行中的租赁与待评价订单</p>
+      </div>
+      <div v-if="activeOrders.length" class="orders-scroll-wrapper">
+        <button v-show="canScrollLeftOrders" class="scroll-arrow scroll-arrow-left" @click="scrollOrders(-1)" aria-label="向左滚动">
+          <el-icon :size="18"><ArrowLeftBold /></el-icon>
+        </button>
+        <div class="orders-scroll" ref="ordersScrollRef" @scroll="updateOrderScrollState">
+          <div
+            v-for="order in activeOrders"
+            :key="order.id"
+            class="my-order-card"
+            @click="router.push(`/orders/${order.id}`)"
+          >
+            <div class="my-order-cover">
+              <img :src="resolveAdminImage(order.carCover)" :alt="order.carName" />
+              <span class="my-order-status" :class="order.status">
+                {{ order.status === 'renting' ? '租赁中' : order.reviewStatusName }}
+              </span>
+            </div>
+            <div class="my-order-info">
+              <h3 class="my-order-name">{{ order.carName }}</h3>
+              <p class="my-order-date">{{ order.startDate }} 至 {{ order.endDate }}</p>
+              <p class="my-order-store">{{ order.store }}</p>
+              <div class="my-order-actions">
+                <el-button
+                  v-if="order.reviewStatus === 'unreviewed'"
+                  type="primary"
+                  size="small"
+                  @click.stop="openReviewDialog(order)"
+                >去评价</el-button>
+                <el-button v-else size="small" @click.stop="router.push(`/orders/${order.id}`)">查看详情</el-button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <button v-show="canScrollRightOrders" class="scroll-arrow scroll-arrow-right" @click="scrollOrders(1)" aria-label="向右滚动">
+          <el-icon :size="18"><ArrowRightBold /></el-icon>
+        </button>
+      </div>
+      <div v-else class="container">
+        <EmptyTips text="暂无进行中的订单" show-action action-text="去租车" @action="router.push('/vehicles')" />
       </div>
     </section>
 
@@ -45,7 +118,7 @@
           </div>
         </div>
         <div class="brand-image">
-          <img :src="brandImg" alt="豪华跑车" />
+          <img :src="resolveClientImage(brandImg)" alt="豪华跑车" />
         </div>
       </div>
     </section>
@@ -97,16 +170,40 @@
       </div>
       <div class="reviews-scroll">
         <div v-for="review in reviews" :key="review.id" class="review-card">
-          <div class="review-stars">
-            <el-icon v-for="n in review.rating" :key="n" class="star"><StarFilled /></el-icon>
-          </div>
-          <p class="review-content">"{{ review.content }}"</p>
           <div class="review-user">
-            <el-avatar :size="40">{{ review.name.charAt(0) }}</el-avatar>
+            <el-avatar :size="40" :src="resolveClientImage(review.avatar) || undefined">
+              {{ review.name ? review.name.charAt(0) : '' }}
+            </el-avatar>
             <div>
               <p class="review-name">{{ review.name }}</p>
               <p class="review-meta">{{ review.carName }} · {{ review.date }}</p>
             </div>
+          </div>
+          <div class="review-stars">
+            <el-icon v-for="n in review.rating" :key="n" class="star"><StarFilled /></el-icon>
+          </div>
+          <p
+            ref="reviewContentRefs"
+            class="review-content"
+            :class="{ 'is-expanded': expandedReviewIds.has(review.id) }"
+          >"{{ review.content }}"</p>
+          <button
+            v-if="clampedReviewIds.has(review.id)"
+            class="review-toggle"
+            @click="toggleReview(review.id)"
+          >
+            {{ expandedReviewIds.has(review.id) ? '收起' : '展开' }}
+            <el-icon class="toggle-icon" :class="{ 'is-expanded': expandedReviewIds.has(review.id) }"><ArrowDownBold /></el-icon>
+          </button>
+          <div v-if="parseReviewImages(review.images).length" class="review-images">
+            <img
+              v-for="(img, i) in parseReviewImages(review.images)"
+              :key="i"
+              :src="resolveClientImage(img)"
+              class="review-img"
+              loading="lazy"
+              @click="previewReviewImages(review.images, i)"
+            />
           </div>
         </div>
       </div>
@@ -180,35 +277,183 @@
         </div>
       </div>
     </section>
+
+    <!-- 评价弹窗 -->
+    <ReviewDialog
+      v-model="reviewDialogVisible"
+      :order-id="reviewDialogOrderId"
+      @success="handleReviewSuccess"
+    />
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import CarCard from '@/components/CarCard/index.vue'
 import CouponCard from '@/components/CouponCard/index.vue'
+import EmptyTips from '@/components/EmptyTips/index.vue'
+import ReviewDialog from '@/components/ReviewDialog/index.vue'
 import { useScrollReveal } from '@/composables/useScrollReveal'
-import { useUserStore } from '@/stores'
+import { useUserStore, useAppStore } from '@/stores'
 import { useSystemConfig } from '@/composables/useSystemConfig'
 import { getActiveCarouselApi } from '@/api/modules/carousel'
 import { getHotCarsApi } from '@/api/modules/car'
 import { getAvailableCouponsApi, getClaimedCouponIdsApi, claimCouponApi } from '@/api/modules/coupon'
 import { getAdvantagesApi, getReviewsApi, getDictByTypeApi } from '@/api/modules/system'
 import { submitFeedbackApi } from '@/api/modules/feedback'
+import { getMyActiveOrdersApi } from '@/api/modules/order'
+import { resolveAdminImage, resolveClientImage } from '@/utils/image'
 
 const router = useRouter()
 const userStore = useUserStore()
+const appStore = useAppStore()
 const { config, loadConfig } = useSystemConfig()
 useScrollReveal()
+
+// 解析评价 images 字段（JSON 数组字符串 → URL 列表）
+function parseReviewImages(imagesStr) {
+  if (!imagesStr) return []
+  try {
+    const parsed = JSON.parse(imagesStr)
+    return Array.isArray(parsed) ? parsed : []
+  } catch (e) {
+    return imagesStr.split(',').map(s => s.trim()).filter(Boolean)
+  }
+}
+
+// 图片预览（调用全局 ImagePreview 组件）
+function previewReviewImages(imagesStr, index = 0) {
+  const list = parseReviewImages(imagesStr).map(resolveClientImage)
+  if (list.length) appStore.openImagePreview(list, index)
+}
+
+// 评价弹窗
+const reviewDialogVisible = ref(false)
+const reviewDialogOrderId = ref(null)
+
+function openReviewDialog(order) {
+  reviewDialogOrderId.value = order.id
+  reviewDialogVisible.value = true
+}
+
+// 评价成功后刷新我的订单
+async function handleReviewSuccess() {
+  if (userStore.isLoggedIn) {
+    try {
+      activeOrders.value = await getMyActiveOrdersApi(6)
+      nextTick(() => updateOrderScrollState())
+    } catch (e) {
+      activeOrders.value = []
+    }
+  }
+}
+
+// ---------- 轮播控制器 ----------
+// 轮播每张间隔时间（毫秒），默认 5 秒
+const CAROUSEL_INTERVAL = 5000
+const carouselRef = ref(null)
+// 当前激活的轮播索引
+const activeCarouselIndex = ref(0)
+// 鼠标悬停的圆点索引（null 表示未悬停）
+const hoverDotIndex = ref(null)
+// 当前激活项的播放进度百分比 0-100
+const mainProgress = ref(0)
+// requestAnimationFrame 句柄
+let mainRaf = null
+// 当前进度周期起始时间戳
+let mainStartTime = 0
+
+// el-carousel change 事件：同步激活索引；仅在未悬停时重启倒计时（悬停态由 onDotEnter 负责）
+function onCarouselChange(newIdx) {
+  activeCarouselIndex.value = newIdx
+  if (hoverDotIndex.value === null) startMainProgress()
+}
+
+// 鼠标进入圆点：切换到该项 + 重启进度（动态填充 5 秒）；因 hoverDotIndex 非空，到 100% 不会自动切换（暂停）
+function onDotEnter(idx) {
+  hoverDotIndex.value = idx
+  carouselRef.value?.setActiveItem(idx)
+  startMainProgress()
+}
+
+// 鼠标离开整组圆点：恢复自动播放，重启当前项倒计时（到 100% 自动切下一张）
+function onIndicatorsLeave() {
+  hoverDotIndex.value = null
+  startMainProgress()
+}
+
+// 圆点填充宽度：仅激活项展示当前播放进度，其余为 0
+function getDotFillWidth(idx) {
+  if (idx === activeCarouselIndex.value) return mainProgress.value
+  return 0
+}
+
+// 启动/重启 5 秒进度动画
+// - 未悬停时：到 100% 自动切到下一张（由 next 触发 change → onCarouselChange 续播）
+// - 悬停时：到 100% 停止且不切换（暂停），进度条满格定格
+function startMainProgress() {
+  cancelAnimationFrame(mainRaf)
+  mainProgress.value = 0
+  mainStartTime = performance.now()
+  const tick = (now) => {
+    const elapsed = now - mainStartTime
+    mainProgress.value = Math.min(100, (elapsed / CAROUSEL_INTERVAL) * 100)
+    if (mainProgress.value < 100) {
+      mainRaf = requestAnimationFrame(tick)
+    } else if (hoverDotIndex.value === null) {
+      // 未悬停：倒计时结束，自动切下一张
+      carouselRef.value?.next()
+    }
+    // 悬停态到 100%：停止 ticking，不切换（暂停）
+  }
+  mainRaf = requestAnimationFrame(tick)
+}
+
+// 轮播跳转链接：外链新标签打开，内链 router.push，为空回退 /vehicles
+function handleCarouselClick(item) {
+  const url = item.linkUrl
+  if (!url) {
+    router.push('/vehicles')
+    return
+  }
+  // 以 http:// 或 https:// 开头视为外链
+  if (/^https?:\/\//i.test(url)) {
+    window.open(url, '_blank')
+    return
+  }
+  router.push(url)
+}
 
 // 数据
 const carousel = ref([])
 const hotCars = ref([])
 const advantages = ref([])
 const reviews = ref([])
+// 评价展开状态管理
+const reviewContentRefs = ref([])
+const expandedReviewIds = ref(new Set())
+const clampedReviewIds = ref(new Set())
+const toggleReview = (id) => {
+  const next = new Set(expandedReviewIds.value)
+  next.has(id) ? next.delete(id) : next.add(id)
+  expandedReviewIds.value = next
+}
+// 检测哪些评价内容被截断（需要显示展开按钮）
+const detectClampedReviews = () => {
+  const clamped = new Set()
+  reviewContentRefs.value.forEach((el, idx) => {
+    const review = reviews.value[idx]
+    if (el && review && el.scrollHeight > el.clientHeight + 1) {
+      clamped.add(review.id)
+    }
+  })
+  clampedReviewIds.value = clamped
+}
 const activeCoupons = ref([])
+// 我的订单（登录用户：租赁中 + 待评价）
+const activeOrders = ref([])
 // 车型分类字典（预约咨询表单意向车型下拉用）
 const vehicleTypes = ref([])
 // 已领取的优惠券ID列表（登录时加载，用于判断领取状态）
@@ -254,6 +499,25 @@ function scrollCoupons(direction) {
   el.scrollBy({ left: direction * cardWidth * 2, behavior: 'smooth' })
 }
 
+// 我的订单横向滚动控制
+const ordersScrollRef = ref(null)
+const canScrollLeftOrders = ref(false)
+const canScrollRightOrders = ref(false)
+
+function updateOrderScrollState() {
+  const el = ordersScrollRef.value
+  if (!el) return
+  canScrollLeftOrders.value = el.scrollLeft > 10
+  canScrollRightOrders.value = el.scrollLeft < el.scrollWidth - el.clientWidth - 10
+}
+
+function scrollOrders(direction) {
+  const el = ordersScrollRef.value
+  if (!el) return
+  const cardWidth = 280 + 24 // 订单卡片宽度 + 间距
+  el.scrollBy({ left: direction * cardWidth * 2, behavior: 'smooth' })
+}
+
 // 品牌简介图片（本地静态资源，通过后端 /uploads 提供）
 const brandImg = '/uploads/banners/brand.jpg'
 
@@ -281,14 +545,30 @@ async function loadData() {
     }
     const results = await Promise.all(promises)
     carousel.value = results[0] || []
+    // 轮播数据就绪后初始化激活索引并启动主进度（与自动切换同步）
+    activeCarouselIndex.value = 0
+    if (carousel.value.length) {
+      nextTick(() => startMainProgress())
+    }
     hotCars.value = results[1] || []
     advantages.value = results[2] || []
     reviews.value = results[3] || []
+    // 评价渲染后检测哪些内容被截断（用于显示展开按钮）
+    nextTick(() => detectClampedReviews())
     activeCoupons.value = results[4] || []
     vehicleTypes.value = results[6] || []
     // 第8个结果（登录时为已领取ID列表，未登录时为 undefined）
     if (userStore.isLoggedIn && results[7]) {
       claimedCouponIds.value = results[7]
+    }
+    // 登录用户额外加载进行中订单（租赁中 + 待评价）
+    if (userStore.isLoggedIn) {
+      try {
+        activeOrders.value = await getMyActiveOrdersApi(6)
+      } catch (e) {
+        activeOrders.value = []
+      }
+      nextTick(() => updateOrderScrollState())
     }
     // 热门车型加载后初始化滚动箭头状态
     nextTick(() => {
@@ -315,6 +595,14 @@ async function handleClaimCoupon(coupon) {
     // 领取成功，更新已领取列表
     if (!claimedCouponIds.value.includes(coupon.id)) {
       claimedCouponIds.value.push(coupon.id)
+    }
+    // 本地递增已领取数，让库存进度条/剩余量立即响应式更新
+    // 不重新拉 getAvailableCouponsApi()，避免列表 DOM 重建导致滚动位置跳动
+    if (coupon.totalCount !== -1 && coupon.totalCount != null) {
+      coupon.receivedCount = (coupon.receivedCount || 0) + 1
+      if (coupon.remainCount != null) {
+        coupon.remainCount = Math.max(0, coupon.remainCount - 1)
+      }
     }
     ElMessage.success('优惠券领取成功，可在选车结算时使用')
   } catch (e) {
@@ -367,10 +655,32 @@ async function submitAppointment() {
 }
 
 onMounted(loadData)
+
+// 组件卸载前清理时间条动画，避免内存泄漏
+onBeforeUnmount(() => {
+  if (mainRaf) cancelAnimationFrame(mainRaf)
+})
 </script>
 
 <style lang="scss" scoped>
-.home-page { overflow-x: hidden; }
+.home-page {
+  // overflow-x: hidden 会裁切横向溢出（如横向滚动容器的 padding 溢出）。
+  // 注意：overflow-x: hidden 会让 overflow-y 被强制计算为 auto，使 .home-page
+  // 成为纵向滚动容器。必须确保内部无任何纵向溢出（scrollHeight === clientHeight），
+  // 否则 wheel 事件会被 .home-page 捕获导致滚动卡顿。下方 .appointment 的
+  // transform 复位即为消除最后一个 section 的 30px 纵向偏移。
+  overflow-x: hidden;
+}
+
+// 最后一个 section（预约咨询）：取消 .fade-in-up 的初始 transform:translateY(30px)。
+// 否则该 section 在变成 .visible 之前会向下偏移 30px，导致 .home-page 的
+// scrollHeight 比 clientHeight 多 30px，配合 overflow-x:hidden → overflow-y:auto
+// 的副作用，.home-page 会成为可滚动容器并捕获 wheel 事件，引发：
+// 1) 滚一下卡住、需移动鼠标才能继续滚动；2) 内容区出现多余滚动条。
+// 取消 transform 后该 section 仅保留 opacity 淡入效果，视觉上仍为渐显。
+.appointment.fade-in-up {
+  transform: translateY(0);
+}
 
 // ---------- 1. 轮播（Full-bleed cinematic hero）----------
 // 轮播图占满整个视口（100vh），从视口顶部开始（layout-main 已无 padding-top）。
@@ -386,7 +696,9 @@ onMounted(loadData)
 
 .carousel-item {
   width: 100%; height: 100%;
+  // cover + no-repeat + center：图片占满一行，不重复、不叠排
   background-size: cover;
+  background-repeat: no-repeat;
   background-position: center;
   display: flex;
   align-items: flex-end;
@@ -433,6 +745,63 @@ onMounted(loadData)
   padding: 14px 40px;
 }
 
+// ---------- 轮播自定义控制器 ----------
+// 默认一排小圆点（居中底部）；仅激活项鼠标悬停时展开为横向时间条，
+// 其 .dot-fill 宽度由 JS 按 5 秒动态填充 0%→100%
+.carousel-indicators {
+  position: absolute;
+  bottom: $space-xl;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  // 仅需高于轮播图内部层（carousel-content 为 z-index:2），
+  // 必须低于 fixed header（$z-header=100），否则滚动时圆点会盖住导航栏
+  z-index: 10;
+  margin-bottom: $space-sm;
+}
+
+.carousel-dot {
+  // 默认圆点形态
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: none;
+  border-radius: 9999px;
+  // 用 --lux-text 适配双主题：暗色主题=白点，亮色主题=黑点，
+  // 始终与 overlay 底部融入的 --lux-bg 背景形成最大对比
+  background: color-mix(in srgb, var(--lux-text) 45%, transparent);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  transition: width 0.35s ease, height 0.35s ease, background-color 0.25s ease;
+  // 高亮态：当前激活
+  &.is-active { background: var(--lux-text); }
+  // 鼠标悬停任意圆点即展开为时间条（宽度变大、压扁为条状），轨道用低透明度文字色
+  &.is-hover {
+    width: 64px;
+    height: 4px;
+    background: color-mix(in srgb, var(--lux-text) 25%, transparent);
+  }
+}
+
+// 时间条内部填充层：宽度由 getDotFillWidth 动态驱动
+// 用品牌红实色，双主题下均醒目
+.dot-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 0;
+  background: $color-primary;
+  border-radius: inherit;
+  // 非悬停态下不展示填充，保持纯圆点视觉
+  .carousel-dot:not(.is-hover) & {
+    display: none;
+  }
+}
+
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(40px); }
   to { opacity: 1; transform: translateY(0); }
@@ -440,7 +809,7 @@ onMounted(loadData)
 
 .scroll-hint {
   position: absolute;
-  bottom: $space-md;
+  bottom: $space-xs;
   left: 50%;
   transform: translateX(-50%);
   color: $color-text;
@@ -553,6 +922,83 @@ onMounted(loadData)
   &.scroll-arrow-right { right: $space-sm; }
 }
 
+// ---------- 1.5 我的订单 ----------
+.my-orders-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.orders-scroll-wrapper {
+  position: relative;
+}
+.orders-scroll {
+  display: flex;
+  gap: $space-md;
+  padding: $space-base max($space-md, calc((100vw - #{$content-max-width}) / 2)) $space-lg;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scroll-behavior: smooth;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}
+.my-order-card {
+  min-width: 280px;
+  max-width: 280px;
+  flex-shrink: 0;
+  background: $color-bg-gray;
+  border: 1px solid $color-border;
+  border-radius: $radius-none;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform $transition-base, border-color $transition-fast;
+  &:hover {
+    transform: translateY(-2px);
+    border-color: $color-text-tertiary;
+  }
+}
+.my-order-cover {
+  position: relative;
+  height: 160px;
+  overflow: hidden;
+  img { width: 100%; height: 100%; object-fit: cover; display: block; }
+}
+.my-order-status {
+  position: absolute;
+  top: $space-xs;
+  right: $space-xs;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  padding: 2px 8px;
+  border-radius: $radius-none;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  &.renting { background: rgba(218, 41, 28, 0.85); }
+  &.completed { background: rgba(3, 144, 74, 0.85); }
+}
+.my-order-info {
+  padding: $space-base $space-md;
+  .my-order-name {
+    font-size: $font-size-md;
+    font-weight: $font-weight-medium;
+    color: $color-text;
+    margin-bottom: $space-xs;
+    @include ellipsis;
+  }
+  .my-order-date {
+    font-size: $font-size-sm;
+    color: $color-text-secondary;
+    margin-bottom: 2px;
+  }
+  .my-order-store {
+    font-size: $font-size-xs;
+    color: $color-text-tertiary;
+  }
+  .my-order-actions {
+    margin-top: $space-sm;
+  }
+}
+
 // ---------- 4. 服务优势 ----------
 .adv-grid {
   display: grid;
@@ -609,6 +1055,15 @@ onMounted(loadData)
   padding: $space-lg;
 }
 
+.review-user {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  margin-bottom: $space-md;
+  .review-name { font-size: $font-size-sm; font-weight: $font-weight-medium; color: $color-text; }
+  .review-meta { font-size: $font-size-xs; color: $color-text-tertiary; margin-top: 2px; }
+}
+
 .review-stars {
   .star { color: var(--lux-primary-text); font-size: $font-size-base; }
   margin-bottom: $space-base;
@@ -618,16 +1073,56 @@ onMounted(loadData)
   font-size: $font-size-base;
   line-height: $line-height-loose;
   color: $color-text;
-  margin-bottom: $space-md;
   font-style: italic;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: -webkit-line-clamp 0.2s ease;
+  &.is-expanded {
+    -webkit-line-clamp: unset;
+    overflow: visible;
+  }
 }
 
-.review-user {
-  display: flex;
+.review-toggle {
+  display: inline-flex;
   align-items: center;
-  gap: $space-sm;
-  .review-name { font-size: $font-size-sm; font-weight: $font-weight-medium; color: $color-text; }
-  .review-meta { font-size: $font-size-xs; color: $color-text-tertiary; margin-top: 2px; }
+  gap: 4px;
+  margin-top: $space-sm;
+  padding: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: $font-size-sm;
+  color: $color-text-tertiary;
+  transition: color 0.2s ease;
+  &:hover { color: $color-primary; }
+  .toggle-icon {
+    transition: transform 0.2s ease;
+    &.is-expanded { transform: rotate(180deg); }
+  }
+}
+
+// 评价图片：小图展示，宽高自适应，可预览
+.review-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: $space-xs;
+  margin-top: $space-sm;
+}
+.review-img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: $radius-none;
+  border: 1px solid $color-border;
+  cursor: pointer;
+  transition: opacity $transition-fast, border-color $transition-fast;
+  &:hover {
+    opacity: 0.8;
+    border-color: var(--lux-primary-text);
+  }
 }
 
 // ---------- 6. 优惠券（横向滚动，hover 浮层展开） ----------

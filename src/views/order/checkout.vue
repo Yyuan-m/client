@@ -7,7 +7,7 @@
         <!-- 订单概览 -->
         <div class="checkout-left">
           <div v-for="item in cartStore.selectedItems" :key="item.carId" class="order-item">
-            <img :src="item.cover" :alt="item.carName" class="item-img" />
+            <img :src="resolveAdminImage(item.cover)" :alt="item.carName" class="item-img" />
             <div class="item-info">
               <h3>{{ item.carName }}</h3>
               <p class="item-date">{{ item.startDate }} 至 {{ item.endDate }}（{{ item.days }}天）</p>
@@ -47,14 +47,14 @@
           <!-- 取还车信息 -->
           <el-form ref="formRef" :model="form" :rules="rules" label-position="top" class="checkout-form">
             <h3 class="form-title">取还车信息</h3>
-            <el-form-item label="取车城市" prop="city">
-              <el-select v-model="form.city" placeholder="请选择取车城市" style="width: 100%" @change="onCityChange">
-                <el-option v-for="c in cities" :key="c" :label="c" :value="c" />
+            <el-form-item label="取车城市" prop="cityId">
+              <el-select v-model="form.cityId" placeholder="请选择取车城市" style="width: 100%" @change="onCityChange">
+                <el-option v-for="c in cityList" :key="c.id" :label="c.name" :value="c.id" />
               </el-select>
             </el-form-item>
             <el-form-item label="取车门店" prop="store">
               <el-select v-model="form.store" placeholder="请选择取车门店" style="width: 100%">
-                <el-option v-for="s in availableStores" :key="s.id" :label="s.shortName" :value="s.shortName" />
+                <el-option v-for="s in availableStores" :key="s.id" :label="s.name" :value="s.name" />
               </el-select>
             </el-form-item>
             <el-form-item label="联系人" prop="name">
@@ -65,7 +65,7 @@
             </el-form-item>
             <el-form-item label="优惠券">
               <div class="coupon-pick-row">
-                <div class="coupon-pick-current" v-if="selectedCoupon">
+                <div class="coupon-pick-current" v-if="selectedCoupons.length">
                   <span class="cp-label">{{ selectedCouponLabel }}</span>
                   <el-button text size="small" @click="openCouponDialog">更换</el-button>
                   <el-button text size="small" @click="clearCoupon">不使用</el-button>
@@ -98,22 +98,23 @@
         </div>
       </div>
 
-      <!-- 优惠券选择弹窗 -->
+      <!-- 优惠券选择弹窗（v3 支持多张可叠加券） -->
       <el-dialog v-model="couponDialogVisible" title="选择优惠券" width="640px" :close-on-click-modal="false">
         <div class="coupon-dialog-body">
-          <p class="coupon-tip">下单时可使用以下优惠券抵扣，不使用将视为放弃。点击"立即使用"将自动为您勾选最优优惠券。</p>
+          <p class="coupon-tip">单次订单默认使用一张优惠券；标有「可叠加」的优惠券可同时使用多张，时长券不支持叠加。点击优惠券进行勾选/取消。</p>
           <div v-if="coupons.length" class="coupon-pick-list">
             <div
               v-for="c in coupons"
               :key="c.id"
               class="coupon-pick-item"
-              :class="{ active: form.couponUserId === c.id, disabled: !isCouponUsable(c) }"
-              @click="pickCoupon(c)"
+              :class="{ active: isSelected(c), disabled: isCouponDisabled(c) }"
+              @click="toggleCoupon(c)"
             >
-              <CouponCard :coupon="c" mode="mine" :show-action="false" :show-stock="false" />
+              <CouponCard :coupon="c" mode="mine" :show-action="false" :show-stock="false" :show-status="false" />
               <div class="cp-check">
-                <el-icon v-if="form.couponUserId === c.id" :size="20"><Select /></el-icon>
+                <el-icon v-if="isSelected(c)" :size="20"><Select /></el-icon>
               </div>
+              <span v-if="c.stackable === 1" class="cp-stackable-tag">可叠加</span>
             </div>
           </div>
           <EmptyTips v-else text="暂无可用优惠券" />
@@ -136,8 +137,9 @@ import EmptyTips from '@/components/EmptyTips/index.vue'
 import CouponCard from '@/components/CouponCard/index.vue'
 import { useCartStore, useUserStore } from '@/stores'
 import { moneyUtil, validators } from '@/utils'
+import { resolveAdminImage } from '@/utils/image'
 import { createOrderApi } from '@/api/modules/order'
-import { getStoresApi } from '@/api/modules/system'
+import { getStoresApi, getCitiesApi } from '@/api/modules/system'
 import { getUsableCouponsApi } from '@/api/modules/coupon'
 
 const router = useRouter()
@@ -151,12 +153,13 @@ const couponDialogVisible = ref(false)
 // 展开价格明细的车辆ID列表
 const expandedItems = ref([])
 const form = reactive({
+  cityId: '',
   city: '',
   store: '',
   name: userStore.user?.nickname || userStore.user?.realName || '',
   phone: userStore.user?.phone || '',
-  // v2: 选中用户优惠券实例ID（member_coupon.id），下单传给后端锁定
-  couponUserId: null
+  // v3: 选中用户优惠券实例ID列表（member_coupon.id），支持多张可叠加券
+  couponUserIds: []
 })
 
 // 取某车的价格明细（来自 cartStore.priceDetails）
@@ -175,7 +178,7 @@ function toggleItemDetail(carId) {
 
 // 必填校验规则
 const rules = {
-  city: [{ required: true, message: '请选择取车城市', trigger: 'change' }],
+  cityId: [{ required: true, message: '请选择取车城市', trigger: 'change' }],
   store: [{ required: true, message: '请选择取车门店', trigger: 'change' }],
   name: [{ required: true, message: '请填写联系人姓名', trigger: 'blur' }],
   phone: [
@@ -184,34 +187,30 @@ const rules = {
   ]
 }
 
-// 门店列表：从后端拉取，按"城市·门店名"格式拆分
+// 城市/门店列表：分别从 customer_city、customer_store 拉取，通过 cityId 关联
+const cityList = ref([])
 const storeList = ref([])
-const cities = computed(() => {
-  const set = new Set()
-  storeList.value.forEach((s) => {
-    if (s.name && s.name.includes('·')) set.add(s.name.split('·')[0])
-  })
-  return [...set]
-})
+// 当前城市下可选门店（按 store.cityId === form.cityId 过滤）
 const availableStores = computed(() =>
-  storeList.value
-    .filter((s) => !form.city || (s.name && s.name.startsWith(form.city + '·')))
-    .map((s) => ({ id: s.id, shortName: s.name.includes('·') ? s.name.split('·')[1] : s.name }))
+  storeList.value.filter((s) => form.cityId && s.cityId === form.cityId)
 )
 
-// ============ 优惠券（v2）============
+// ============ 优惠券（v3 支持多张可叠加券）============
 // coupons 列表：getUsableCouponsApi 返回的 member_coupon 列表，每项 id 为用户券实例ID
-// 字段：id(member_coupon.id) / couponId / couponName / couponType / couponValue / minAmount / discountCap / applyScope / status / expireTime
+// 字段：id(member_coupon.id) / couponId / couponName / couponType / couponValue / minAmount / discountCap / applyScope / stackable / status / expireTime
 const coupons = ref([])
-// 选中的优惠券对象
-const selectedCoupon = computed(() => coupons.value.find((c) => c.id === form.couponUserId) || null)
-// 当前选中券的展示文案
+// 选中的优惠券对象列表（基于 form.couponUserIds）
+const selectedCoupons = computed(() =>
+  coupons.value.filter((c) => form.couponUserIds.includes(c.id))
+)
+// 当前选中券的展示文案（多张用顿号分隔）
 const selectedCouponLabel = computed(() => {
-  const c = selectedCoupon.value
-  if (!c) return ''
-  const name = c.couponName || c.name || '优惠券'
-  const val = couponFaceValue(c)
-  return `${name}（${val}）`
+  if (!selectedCoupons.value.length) return ''
+  return selectedCoupons.value.map((c) => {
+    const name = c.couponName || c.name || '优惠券'
+    const val = couponFaceValue(c)
+    return `${name}（${val}）`
+  }).join('、')
 })
 
 // 优惠券面额展示
@@ -245,19 +244,69 @@ function normalizeCoupon(c) {
   }
 }
 
-// 优惠券抵扣金额（v2 算法，与后端 CouponService.doCalculate 对齐）
+// 判断某张券在当前多选场景下是否被禁用（不可点击）
+// 规则：
+//   - 不可用（门槛/范围不满足）→ 禁用
+//   - 已选中的券始终可点击（用于取消选中）
+//   - 未选中时：若当前已选中有不可叠加券，或当前已选中有券且该券 stackable≠1，则禁用
+function isCouponDisabled(c) {
+  if (!isCouponUsable(c)) return true
+  if (isSelected(c)) return false // 已选中的可点击取消
+  // 未选中时校验叠加规则
+  if (form.couponUserIds.length === 0) return false
+  // 已有选中券：要新增必须当前券可叠加且已选券全部可叠加，且当前券不是时长券
+  if ((c.couponType || c.type) === 'duration') return true
+  if (c.stackable !== 1) return true
+  // 已选券中若存在不可叠加券或时长券，则不能再选
+  for (const id of form.couponUserIds) {
+    const sc = coupons.value.find((x) => x.id === id)
+    if (!sc) continue
+    if ((sc.couponType || sc.type) === 'duration') return true
+    if (sc.stackable !== 1) return true
+  }
+  return false
+}
+
+// 是否选中
+function isSelected(c) {
+  return form.couponUserIds.includes(c.id)
+}
+
+// 切换选中/取消选中（带叠加规则校验）
+function toggleCoupon(c) {
+  if (isCouponDisabled(c)) {
+    if (!isCouponUsable(c)) {
+      ElMessage.warning('该优惠券不满足使用条件')
+    } else {
+      ElMessage.warning('该优惠券不可与已选优惠券叠加使用')
+    }
+    return
+  }
+  const idx = form.couponUserIds.indexOf(c.id)
+  if (idx > -1) {
+    form.couponUserIds.splice(idx, 1)
+  } else {
+    form.couponUserIds.push(c.id)
+  }
+}
+
+// 优惠券抵扣金额（v3 批量叠加算法，与后端 CouponService.calculateDiscountForOrderBatch 对齐）
 const couponDiscount = computed(() => {
-  if (!form.couponUserId) return 0
-  const c = selectedCoupon.value
-  if (!c) return 0
+  if (!form.couponUserIds.length) return 0
+  const selected = selectedCoupons.value
+  if (!selected.length) return 0
   const rent = cartStore.totalAmount
-  // 时长券不抵扣金额（由后端订单层处理加天数）
-  if ((c.couponType || c.type) === 'duration') return 0
-  return moneyUtil.calcCouponDiscount(rent, normalizeCoupon(c))
+  // 过滤掉时长券（不抵扣金额）
+  const amountCoupons = selected.filter((c) => (c.couponType || c.type) !== 'duration')
+  if (!amountCoupons.length) return 0
+  return moneyUtil.calcCouponDiscountBatch(rent, amountCoupons.map(normalizeCoupon))
 })
 const finalTotal = computed(() => Math.max(0, cartStore.grandTotal - couponDiscount.value))
 
-function onCityChange() {
+function onCityChange(cityId) {
+  // 同步城市名（订单 city 字段存名称，与后端 RentalOrder 一致）
+  const c = cityList.value.find((x) => x.id === cityId)
+  form.city = c?.name || ''
   form.store = ''
 }
 
@@ -290,18 +339,20 @@ async function loadCoupons() {
 
 onMounted(async () => {
   try {
-    const [storesRes] = await Promise.all([
+    const [citiesRes, storesRes] = await Promise.all([
+      getCitiesApi(),
       getStoresApi(),
       loadCoupons(),
       // 确保进入结算页时价格明细已加载（覆盖直接从详情页跳转的场景）
       cartStore.refreshPrices()
     ])
+    cityList.value = citiesRes || []
     storeList.value = storesRes || []
     // 有可用优惠券且用户未选择时，弹窗提醒使用，并自动预选最优优惠券
-    if (coupons.value.length && !form.couponUserId) {
+    if (coupons.value.length && !form.couponUserIds.length) {
       const best = pickBestCoupon()
       if (best) {
-        form.couponUserId = best.id
+        form.couponUserIds = [best.id]
         couponDialogVisible.value = true
       }
     }
@@ -337,29 +388,23 @@ function pickBestCoupon() {
 function openCouponDialog() {
   couponDialogVisible.value = true
 }
-function pickCoupon(c) {
-  // 不可用的券不允许选中
-  if (!isCouponUsable(c)) {
-    ElMessage.warning('该优惠券不满足使用条件')
-    return
-  }
-  form.couponUserId = c.id
-}
 function clearCoupon() {
-  form.couponUserId = null
+  form.couponUserIds = []
 }
 function skipCoupon() {
-  form.couponUserId = null
+  form.couponUserIds = []
   couponDialogVisible.value = false
 }
-// 立即使用：自动勾选最优优惠券并关闭弹窗
+// 立即使用：确认当前选中券并关闭弹窗
 function useCouponNow() {
-  const best = pickBestCoupon()
-  if (best == null) {
-    ElMessage.warning('暂无可用优惠券')
-    return
+  if (!form.couponUserIds.length) {
+    const best = pickBestCoupon()
+    if (best == null) {
+      ElMessage.warning('暂无可用优惠券')
+      return
+    }
+    form.couponUserIds = [best.id]
   }
-  form.couponUserId = best.id
   couponDialogVisible.value = false
   ElMessage.success('优惠券使用成功')
 }
@@ -387,7 +432,7 @@ async function submitOrder() {
   submitting.value = true
   let res
   try {
-    // v2: 下单传 couponUserId（member_coupon.id），后端负责锁定+计算+回写
+    // v3: 下单传 couponUserIds（member_coupon.id 列表），后端负责批量锁定+叠加计算+回写
     // 价格由后端 PriceService 重新计算（与前端展示一致），避免篡改
     res = await createOrderApi({ ...form, items: cartStore.selectedItems })
   } catch (e) {
@@ -578,6 +623,10 @@ async function submitOrder() {
     border: none;
     &:hover { transform: none; border-color: transparent; }
   }
+  // 让出右上角选择框空间，避免长券名被 .cp-check 压住
+  :deep(.coupon-header) {
+    padding-right: 32px;
+  }
   .cp-check {
     position: absolute;
     top: $space-sm;
@@ -590,6 +639,17 @@ async function submitOrder() {
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+  .cp-stackable-tag {
+    position: absolute;
+    bottom: $space-sm;
+    right: $space-sm;
+    font-size: $font-size-xs;
+    color: #ff6b35;
+    border: 1px solid #ff6b35;
+    border-radius: $radius-full;
+    padding: 1px 8px;
+    background: rgba(255, 107, 53, 0.08);
   }
 }
 </style>

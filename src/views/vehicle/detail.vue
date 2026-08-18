@@ -6,11 +6,11 @@
         <!-- 图片预览 -->
         <div class="detail-gallery fade-in-up">
           <div class="main-image" @click="preview(0)">
-            <img :src="car.cover" :alt="car.name" />
+            <img :src="resolveAdminImage(car.cover)" :alt="car.name" />
           </div>
           <div class="thumb-list">
             <div v-for="(img, i) in car.imageList" :key="i" class="thumb" @click="preview(i)">
-              <img :src="img" :alt="`${car.name} ${i + 1}`" />
+              <img :src="resolveAdminImage(img)" :alt="`${car.name} ${i + 1}`" />
             </div>
           </div>
         </div>
@@ -87,7 +87,7 @@
           <div class="info-right">
             <div class="rent-card">
               <div class="rent-price">
-                <!-- 有券后价：原价划线 + 券后价突出 -->
+                <!-- 有券后价：原价划线 + 券后价突出（标注起步天数） -->
                 <template v-if="hasCouponPrice">
                   <div class="price-original-line">
                     <span class="unit">￥</span>
@@ -96,16 +96,21 @@
                   </div>
                   <div class="price-coupon-line">
                     <span class="coupon-tag">券后价</span>
-                    <span class="unit">￥</span>
-                    <span class="amount">{{ car.couponPrice }}</span>
-                    <span class="unit">/天</span>
+                    <span class="price-main">
+                      <span class="unit">￥</span>
+                      <span class="amount">{{ car.couponPrice }}</span>
+                      <span class="unit">/天</span>
+                    </span>
+                    <span v-if="effectiveMinDays >= 1" class="coupon-min-days">{{ effectiveMinDays }}天起</span>
                   </div>
+                  <div class="coupon-hint">实际抵扣以结算页为准</div>
                 </template>
                 <!-- 无券后价：仅显示原价 -->
                 <template v-else>
                   <span class="unit">￥</span>
                   <span class="amount">{{ car.dailyPrice }}</span>
                   <span class="unit">/天</span>
+                  <span v-if="effectiveMinDays >= 1" class="coupon-min-days standalone">{{ effectiveMinDays }}天起</span>
                 </template>
               </div>
               <!-- 长租折扣提示 -->
@@ -117,7 +122,7 @@
                 <el-icon><WarningFilled /></el-icon>
                 <span>{{ rentedNotice }}</span>
               </div>
-              <DateRentPicker v-model="dateRange" :min-days="1" :max-days="30" :min-date="car.availableDate" @change="onDateChange" />
+              <DateRentPicker v-model="dateRange" :min-days="effectiveMinDays" :max-days="20" :min-date="car.availableDate" @change="onDateChange" />
               <div v-if="rentDays > 0" class="rent-summary">
                 <!-- 价格加载中 -->
                 <div v-if="priceLoading" class="price-loading">
@@ -141,10 +146,9 @@
                     <span class="discount-text">-￥{{ moneyUtil.format(priceDetail.discountAmount) }}</span>
                   </div>
                   <div class="summary-row"><span>租金（{{ rentDays }}天）</span><span>￥{{ moneyUtil.format(priceDetail.rentAmount) }}</span></div>
-                  <div v-if="hasCouponPrice && couponRentAmount < priceDetail.rentAmount" class="summary-row discount"><span>券后租金</span><span>￥{{ moneyUtil.format(couponRentAmount) }}</span></div>
                   <div class="summary-row total">
                     <span>应付合计</span>
-                    <span>￥{{ moneyUtil.format(hasCouponPrice && couponRentAmount < priceDetail.rentAmount ? couponTotalAmount : priceDetail.totalAmount) }}</span>
+                    <span>￥{{ moneyUtil.format(priceDetail.totalAmount) }}</span>
                   </div>
                 </template>
                 <!-- 兜底（计算失败） -->
@@ -154,6 +158,27 @@
               <button class="add-cart-btn" :disabled="priceLoading" @click="addToCart">
                 <el-icon><ShoppingCart /></el-icon>{{ isRented ? '预约租车' : '加入购物车' }}
               </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 车辆素材分类照片 -->
+        <div class="material-gallery fade-in-up" v-if="imageGroups.length">
+          <h3 class="gallery-title"><el-icon><PictureFilled /></el-icon>车辆素材</h3>
+          <div v-for="group in imageGroups" :key="group.category" class="image-group">
+            <h4 class="group-title">
+              {{ group.category }}
+              <span class="group-count">{{ group.images.length }}张</span>
+            </h4>
+            <div class="image-list">
+              <div
+                v-for="(img, i) in group.images"
+                :key="i"
+                class="material-image"
+                @click="previewMaterial(group.images, i)"
+              >
+                <img :src="resolveAdminImage(img)" :alt="`${car.name} ${group.category} ${i + 1}`" loading="lazy" />
+              </div>
             </div>
           </div>
         </div>
@@ -167,15 +192,16 @@
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Loading, WarningFilled } from '@element-plus/icons-vue'
+import { Loading, WarningFilled, PictureFilled } from '@element-plus/icons-vue'
 import PageSkeleton from '@/components/PageSkeleton/index.vue'
 import EmptyTips from '@/components/EmptyTips/index.vue'
 import DateRentPicker from '@/components/DateRentPicker/index.vue'
 import { useScrollReveal } from '@/composables/useScrollReveal'
-import { getCarDetailApi } from '@/api/modules/car'
+import { getCarDetailApi, getCarImagesApi } from '@/api/modules/car'
 import { calcCarPriceApi } from '@/api/modules/price'
 import { useAppStore, useUserStore, useCartStore } from '@/stores'
 import { moneyUtil } from '@/utils'
+import { resolveAdminImage } from '@/utils/image'
 
 const route = useRoute()
 const router = useRouter()
@@ -193,14 +219,21 @@ const rentDays = ref(0)
 const priceDetail = ref(null)
 const priceLoading = ref(false)
 
-// 券后价：登录且有可用优惠券时由后端返回
+// 车辆素材图片（按分类分组，来自 car_rental.car_image 表）
+const imageGroups = ref([])
+
+// 券后价：登录且有可用优惠券时由后端返回（仅作起步参考，实际抵扣以结算页为准）
 const hasCouponPrice = computed(() => {
   const cp = car.value?.couponPrice
   const dp = car.value?.dailyPrice
   return cp != null && Number(cp) > 0 && Number(cp) < Number(dp)
 })
-const couponRentAmount = computed(() => moneyUtil.calcRent(car.value?.couponPrice, rentDays.value))
-const couponTotalAmount = computed(() => moneyUtil.calcTotal(couponRentAmount.value))
+
+// 实际最小起租天数（车辆级 minRentDays 字段，至少为 1）
+const effectiveMinDays = computed(() => {
+  if (!car.value) return 1
+  return Math.max(1, Number(car.value.minRentDays) || 1)
+})
 
 // 长租折扣提示（基于车辆字段展示，未选日期时也能看到）
 const discountTip = computed(() => {
@@ -275,7 +308,13 @@ watch([() => car.value?.id, rentDays, dateRange], async () => {
 }, { immediate: false })
 
 function preview(index) {
-  appStore.openImagePreview(car.value.imageList, index)
+  appStore.openImagePreview(car.value.imageList.map(resolveAdminImage), index)
+}
+
+// 预览某分类下的素材图片
+function previewMaterial(images, index) {
+  if (!images || !images.length) return
+  appStore.openImagePreview(images.map(resolveAdminImage), index)
 }
 
 async function goCheckout() {
@@ -307,6 +346,11 @@ async function addToCart() {
     return
   }
   if (rentDays.value === 0) {
+    if (effectiveMinDays.value > 1) {
+      ElMessage.warning(`请选择租车日期，需至少租 ${effectiveMinDays.value} 天起`)
+    } else {
+      ElMessage.warning('请选择租车日期')
+    }
     return
   }
   // 已出租车辆：校验起租日期不早于最早可租日期
@@ -334,8 +378,17 @@ function checkAvailableDate() {
 
 async function loadDetail() {
   loading.value = true
+  imageGroups.value = []
   try {
-    car.value = await getCarDetailApi(route.params.id)
+    const [detail, groups] = await Promise.all([
+      getCarDetailApi(route.params.id),
+      getCarImagesApi(route.params.id).catch(e => {
+        console.error('车辆素材图片加载失败', e)
+        return []
+      })
+    ])
+    car.value = detail
+    imageGroups.value = groups || []
   } catch (e) {
     console.error('车辆详情加载失败', e)
   } finally {
@@ -484,7 +537,8 @@ onMounted(loadDetail)
   .price-coupon-line {
     display: flex;
     align-items: baseline;
-    gap: 2px;
+    flex-wrap: wrap;
+    gap: 2px 4px;
     margin-top: 2px;
     .coupon-tag {
       font-size: 10px;
@@ -493,10 +547,39 @@ onMounted(loadDetail)
       background: var(--lux-primary-text);
       padding: 1px 6px;
       border-radius: 2px;
-      margin-right: 4px;
       letter-spacing: 0.5px;
       line-height: 1.4;
+      flex-shrink: 0;
+      white-space: nowrap;
     }
+    .price-main {
+      display: inline-flex;
+      align-items: baseline;
+      gap: 1px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .coupon-min-days {
+      display: inline-flex;
+      align-items: center;
+      font-size: 11px;
+      font-weight: $font-weight-bold;
+      color: #fff;
+      background: $color-warning;
+      padding: 2px 8px;
+      border-radius: 2px;
+      letter-spacing: 0.5px;
+      line-height: 1.4;
+      white-space: nowrap;
+      flex-shrink: 0;
+      // 无券后价时独立展示，加左外边距与价格分隔
+      &.standalone { margin-left: 6px; }
+    }
+  }
+  .coupon-hint {
+    font-size: 10px;
+    color: $color-text-tertiary;
+    margin-top: 2px;
   }
 }
 
@@ -600,6 +683,77 @@ onMounted(loadDetail)
   &:hover {
     border-color: $color-primary;
     color: var(--lux-primary-text);
+  }
+}
+
+// ---------- 车辆素材分类照片 ----------
+.material-gallery {
+  margin-top: $space-xl;
+  padding-top: $space-xl;
+  border-top: 1px solid $color-divider;
+}
+
+.gallery-title {
+  display: flex;
+  align-items: center;
+  gap: $space-xs;
+  font-size: $font-size-xl;
+  font-weight: $font-weight-medium;
+  margin-bottom: $space-lg;
+  color: $color-text;
+  .el-icon { color: var(--lux-primary-text); }
+}
+
+.image-group {
+  margin-bottom: $space-lg;
+  &:last-child { margin-bottom: 0; }
+}
+
+.group-title {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  margin-bottom: $space-base;
+  color: $color-text;
+  padding-left: $space-sm;
+  border-left: 3px solid var(--lux-primary-text);
+  .group-count {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-regular;
+    color: $color-text-tertiary;
+    letter-spacing: 0.5px;
+  }
+}
+
+.image-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: $space-base;
+  @include respond-to('sm') { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+}
+
+.material-image {
+  position: relative;
+  aspect-ratio: 4/3;
+  overflow: hidden;
+  border-radius: $radius-none;
+  cursor: pointer;
+  background: $color-bg-gray-dark;
+  border: 1px solid $color-border;
+  transition: transform $transition-base, border-color $transition-base;
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform $transition-slow;
+  }
+  &:hover {
+    transform: translateY(-2px);
+    border-color: $color-primary;
+    // img { transform: scale(1.05); }
   }
 }
 </style>

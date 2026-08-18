@@ -3,6 +3,7 @@ import { get } from '@/utils/request'
 
 export const getSystemConfigApi = () => get('/api/system/config')
 export const getStoresApi = () => get('/api/system/stores')
+export const getCitiesApi = () => get('/api/system/cities')
 export const getAdvantagesApi = () => get('/api/system/advantages')
 export const getReviewsApi = () => get('/api/system/reviews')
 

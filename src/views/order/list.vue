@@ -20,7 +20,7 @@
               <span class="order-status" :class="order.status">{{ order.statusName }}</span>
             </div>
             <div class="order-body">
-              <img :src="order.carCover" :alt="order.carName" class="order-img" />
+              <img :src="resolveAdminImage(order.carCover)" :alt="order.carName" class="order-img" />
               <div class="order-info">
                 <h3>{{ order.carName }}</h3>
                 <p>{{ order.startDate }} 至 {{ order.endDate }}（{{ order.days }}天）</p>
@@ -62,6 +62,7 @@ import EmptyTips from '@/components/EmptyTips/index.vue'
 import { useScrollReveal } from '@/composables/useScrollReveal'
 import { getOrderListApi, cancelOrderApi } from '@/api/modules/order'
 import { moneyUtil } from '@/utils'
+import { resolveAdminImage } from '@/utils/image'
 
 const { observe } = useScrollReveal()
 

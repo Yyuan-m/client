@@ -4,6 +4,8 @@
     <template v-if="compact">
       <!-- 面额区（默认可见） -->
       <div class="cmp-value-area">
+        <!-- 库存领完角标：紧凑模式下面额区右上角，一眼可见 -->
+        <span v-if="isSoldOut" class="sold-out-corner">已领完</span>
         <div class="coupon-value" v-if="coupon.type === 'discount'">
           <span class="num">{{ discountText }}</span>
           <span class="unit">折</span>
@@ -25,7 +27,7 @@
       <!-- 名称 + 状态（默认可见） -->
       <div class="cmp-head">
         <h4 class="coupon-name">{{ displayName }}</h4>
-        <span v-if="statusTag" class="status-tag" :class="statusTagClass">{{ statusTag }}</span>
+        <span v-if="showStatus && statusTag" class="status-tag" :class="statusTagClass">{{ statusTag }}</span>
       </div>
 
       <!-- 详细信息（hover 展开） -->
@@ -67,6 +69,8 @@
     <template v-else>
       <!-- 左侧面额区 -->
       <div class="coupon-left">
+        <!-- 库存领完角标：经典模式左侧面额区右上角 -->
+        <span v-if="isSoldOut" class="sold-out-corner">已领完</span>
         <div class="coupon-value" v-if="coupon.type === 'discount'">
           <span class="num">{{ discountText }}</span>
           <span class="unit">折</span>
@@ -89,7 +93,7 @@
       <div class="coupon-right">
         <div class="coupon-header">
           <h4 class="coupon-name">{{ displayName }}</h4>
-          <span v-if="statusTag" class="status-tag" :class="statusTagClass">{{ statusTag }}</span>
+          <span v-if="showStatus && statusTag" class="status-tag" :class="statusTagClass">{{ statusTag }}</span>
         </div>
         <p class="coupon-scope">{{ scopeText }}</p>
         <p class="coupon-time">{{ timeText }}</p>
@@ -142,6 +146,8 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
   // 是否展示库存进度条
   showStock: { type: Boolean, default: true },
+  // 是否展示状态标签（"未使用/已使用"等），结算弹窗等场景可关闭
+  showStatus: { type: Boolean, default: true },
   // 紧凑模式：横向滚动 + hover 展开（首页领券中心）
   compact: { type: Boolean, default: false }
 })
@@ -374,6 +380,35 @@ const isSoldOut = computed(() => {
   text-transform: uppercase;
 }
 
+// "已领完/已过期" 状态文案：在 actions 区显示时增强对比，避免与背景混淆
+// 用 danger 色文字 + 淡红背景块，明显于普通灰色辅助文字
+.coupon-actions > .status-text {
+  display: inline-block;
+  padding: 4px 12px;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-semibold;
+  color: $color-danger;
+  background: rgba(241, 58, 44, 0.12);
+  border-radius: $radius-none;
+  letter-spacing: 1.2px;
+}
+
+// 库存领完角标：面额区右上角，紧凑/经典模式共用
+// danger 色实心块 + 白字，确保在深色面额区上一眼可见
+.sold-out-corner {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  padding: 3px 10px;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-bold;
+  letter-spacing: 1.2px;
+  color: #fff;
+  background: $color-danger;
+  border-bottom-left-radius: $radius-xs;
+}
+
 .status-tag {
   font-size: 11px;
   padding: 2px 10px;
@@ -474,6 +509,7 @@ const isSoldOut = computed(() => {
 
   // 顶部面额区：深色提升层 + 法拉利红强调
   .cmp-value-area {
+    position: relative; // 锚定已领完角标
     padding: $space-base $space-md $space-sm;
     background: $color-bg-gray-dark;
     border-bottom: 1px dashed $color-border;

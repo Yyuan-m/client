@@ -8,9 +8,9 @@
 
       <!-- 导航 -->
       <nav class="nav-menu">
-        <router-link to="/" class="nav-link">首页</router-link>
+        <router-link to="/" class="nav-link" :class="{ active: isActive('/') }">首页</router-link>
         <el-dropdown trigger="hover" @command="goVehicles">
-          <span class="nav-link">车型选择<el-icon class="nav-arrow"><ArrowDown /></el-icon></span>
+          <span class="nav-link" :class="{ active: isActive('/vehicles') }">车型选择<el-icon class="nav-arrow"><ArrowDown /></el-icon></span>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="all">全部车型</el-dropdown-item>
@@ -18,8 +18,35 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <router-link to="/about" class="nav-link">关于我们</router-link>
-        <router-link to="/contact" class="nav-link">联系客服</router-link>
+
+        <!-- 公告下拉：hover 展示 3 条高优先级公告 + 查看全部 -->
+        <el-dropdown trigger="hover" popper-class="announcement-popper" @command="onAnnouncementCommand">
+          <span class="nav-link" :class="{ active: isActive('/announcements') }">
+            <el-icon class="nav-bell"><Bell /></el-icon>公告
+            <span v-if="topAnnouncements.length" class="anno-dot">{{ topAnnouncements.length }}</span>
+            <el-icon class="nav-arrow"><ArrowDown /></el-icon>
+          </span>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <template v-if="topAnnouncements.length">
+                <el-dropdown-item v-for="item in topAnnouncements" :key="item.id" :command="item.id">
+                  <div class="anno-pop-item">
+                    <span class="anno-pop-title">{{ item.title }}</span>
+                    <span class="anno-pop-date">{{ item.createdAt?.slice(0, 10) }}</span>
+                  </div>
+                </el-dropdown-item>
+              </template>
+              <el-dropdown-item v-else disabled>
+                <span class="anno-pop-empty">暂无公告</span>
+              </el-dropdown-item>
+              <el-dropdown-item command="all" divided>
+                <span class="anno-pop-all">查看全部公告 →</span>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+        <router-link to="/about" class="nav-link" :class="{ active: isActive('/about') }">关于我们</router-link>
+        <router-link to="/contact" class="nav-link" :class="{ active: isActive('/contact') }">联系客服</router-link>
       </nav>
 
       <!-- 右侧操作 -->
@@ -45,7 +72,7 @@
         <!-- 已登录 -->
         <el-dropdown v-else trigger="hover" @command="handleUserCommand">
           <div class="user-info">
-            <el-avatar :size="32" :src="userStore.user?.avatar">{{ userStore.nickname?.charAt(0) }}</el-avatar>
+            <el-avatar :size="32" :src="resolveClientImage(userStore.user?.avatar)">{{ userStore.nickname?.charAt(0) }}</el-avatar>
             <span class="user-name">{{ userStore.nickname }}</span>
           </div>
           <template #dropdown>
@@ -63,12 +90,15 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore, useCartStore, useAppStore } from '@/stores'
 import { getDictByTypeApi } from '@/api/modules/system'
+import { getTopAnnouncementsApi } from '@/api/modules/announcement'
+import { resolveClientImage } from '@/utils/image'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const cartStore = useCartStore()
 const appStore = useAppStore()
@@ -76,6 +106,9 @@ const isScrolled = ref(false)
 
 // 车型分类字典（从后台 car_rental.sys_dict_data 加载）
 const vehicleTypes = ref([])
+
+// 头部下拉：3 条高优先级公告
+const topAnnouncements = ref([])
 
 const onScroll = () => {
   isScrolled.value = window.scrollY > 20
@@ -87,11 +120,31 @@ onMounted(() => {
   getDictByTypeApi('vehicle_type')
     .then((list) => { vehicleTypes.value = list || [] })
     .catch((e) => console.error('加载车型分类字典失败', e))
+  // 加载头部公告下拉数据
+  getTopAnnouncementsApi()
+    .then((list) => { topAnnouncements.value = list || [] })
+    .catch((e) => console.error('加载公告失败', e))
 })
 onUnmounted(() => window.removeEventListener('scroll', onScroll))
 
 function goVehicles(type) {
   router.push({ path: '/vehicles', query: { type: type === 'all' ? undefined : type } })
+}
+
+// 当前页 tab 高亮：首页严格匹配，其余按前缀匹配（含子路由）
+function isActive(prefix) {
+  const path = route.path
+  if (prefix === '/') return path === '/'
+  return path === prefix || path.startsWith(prefix + '/')
+}
+
+// 公告下拉：点击跳转列表或详情
+function onAnnouncementCommand(command) {
+  if (command === 'all') {
+    router.push('/announcements')
+  } else {
+    router.push(`/announcements/${command}`)
+  }
 }
 
 async function handleUserCommand(command) {
@@ -168,9 +221,30 @@ async function handleUserCommand(command) {
   transition: color $transition-fast;
   cursor: pointer;
   &:hover { color: var(--lux-primary-text); }
+  // 当前页高亮
+  &.active { color: var(--lux-primary-text); }
 }
 
 .nav-arrow { font-size: $font-size-xs; }
+.nav-bell { font-size: $font-size-base; }
+
+// 公告高优先级数量徽章
+.anno-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  margin-left: 2px;
+  border-radius: $radius-full;
+  background: $color-primary;
+  color: #fff;
+  font-size: 10px;
+  font-weight: $font-weight-bold;
+  line-height: 1;
+  letter-spacing: 0;
+}
 
 .header-actions {
   display: flex;
@@ -228,5 +302,58 @@ async function handleUserCommand(command) {
   .nav-menu { gap: $space-md; }
   .nav-link { font-size: $font-size-xs; }
   .user-name { display: none; }
+}
+</style>
+
+<!-- 公告下拉面板：popper 被 teleport 到 body，使用非 scoped + popper-class 定制 -->
+<style lang="scss">
+.announcement-popper.el-dropdown__popper {
+  // 面板宽度
+  .el-dropdown-menu {
+    min-width: 320px;
+    max-width: 360px;
+    padding: 0;
+  }
+
+  .el-dropdown-menu__item {
+    padding: 10px 16px;
+    line-height: 1.4;
+  }
+
+  // 高优先级公告条目
+  .anno-pop-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+  }
+  .anno-pop-title {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--lux-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .anno-pop-date {
+    font-size: 11px;
+    color: var(--lux-text-tertiary);
+  }
+
+  // 空状态
+  .anno-pop-empty {
+    font-size: 13px;
+    color: var(--lux-text-tertiary);
+  }
+
+  // 查看全部
+  .anno-pop-all {
+    width: 100%;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: $color-primary;
+  }
 }
 </style>

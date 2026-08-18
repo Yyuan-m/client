@@ -6,13 +6,18 @@
         <!-- 侧边菜单 -->
         <aside class="profile-sidebar">
           <div class="user-card">
-            <el-avatar :size="64" :src="userStore.user?.avatar">{{ userStore.nickname?.charAt(0) }}</el-avatar>
+            <el-avatar :size="64" :src="resolveClientImage(userStore.user?.avatar)">{{ userStore.nickname?.charAt(0) }}</el-avatar>
             <h3 class="user-name">{{ userStore.nickname }}</h3>
             <p class="user-level">{{ userStore.user?.levelName || '普通会员' }}</p>
           </div>
           <el-menu :default-active="activeTab" @select="activeTab = $event">
             <el-menu-item index="info"><el-icon><User /></el-icon><span>个人信息</span></el-menu-item>
             <el-menu-item index="orders"><el-icon><List /></el-icon><span>我的订单</span></el-menu-item>
+            <el-menu-item index="reviews">
+              <el-icon><EditPen /></el-icon>
+              <span>去评价</span>
+              <span v-if="reviewableCount > 0" class="menu-count-badge">{{ reviewableCount }}</span>
+            </el-menu-item>
             <el-menu-item index="verify"><el-icon><Postcard /></el-icon><span>实名认证</span></el-menu-item>
             <el-menu-item index="coupons"><el-icon><Ticket /></el-icon><span>我的优惠券</span></el-menu-item>
           </el-menu>
@@ -32,7 +37,7 @@
                 class="avatar-uploader"
               >
                 <div class="avatar-wrap" title="点击更换头像">
-                  <el-avatar :size="96" :src="form.avatar">{{ form.nickname?.charAt(0) }}</el-avatar>
+                  <el-avatar :size="96" :src="resolveClientImage(form.avatar)">{{ form.nickname?.charAt(0) }}</el-avatar>
                   <div class="avatar-mask">
                     <el-icon :size="22"><Camera /></el-icon>
                     <span>更换头像</span>
@@ -71,7 +76,7 @@
                     <span class="order-status" :class="order.status">{{ order.statusName }}</span>
                   </div>
                   <div class="order-body">
-                    <img :src="order.carCover" :alt="order.carName" class="order-img" />
+                    <img :src="resolveAdminImage(order.carCover)" :alt="order.carName" class="order-img" />
                     <div class="order-info">
                       <h4>{{ order.carName }}</h4>
                       <p>{{ order.startDate }} 至 {{ order.endDate }}（{{ order.days }}天）</p>
@@ -87,6 +92,53 @@
               <div class="view-all-bar">
                 <el-button type="primary" text @click="router.push('/orders')">查看全部订单 →</el-button>
               </div>
+            </template>
+          </div>
+
+          <!-- 去评价：待首评 + 可追评订单 -->
+          <div v-else-if="activeTab === 'reviews'" class="tab-panel">
+            <h3 class="panel-title">
+              去评价
+              <span v-if="reviewableCount > 0" class="panel-title-count">{{ reviewableCount }}</span>
+            </h3>
+            <p class="panel-desc">完成评价是对车主最好的反馈，每单可评价2次（首次评价 + 追加评价）</p>
+            <div v-if="reviewLoading" v-loading="true" style="min-height: 200px"></div>
+            <template v-else>
+              <div v-if="reviewableOrders.length" class="order-list">
+                <div
+                  v-for="order in reviewableOrders"
+                  :key="order.id"
+                  class="order-card reviewable-card"
+                  @click="router.push(`/orders/${order.id}`)"
+                >
+                  <div class="order-header">
+                    <span class="order-no">订单号：{{ order.orderNo }}</span>
+                    <span class="review-tag" :class="order.reviewStatus">
+                      {{ order.reviewStatus === 'unreviewed' ? '待评价' : '可追评' }}
+                    </span>
+                  </div>
+                  <div class="order-body">
+                    <img :src="resolveAdminImage(order.carCover)" :alt="order.carName" class="order-img" />
+                    <div class="order-info">
+                      <h4>{{ order.carName }}</h4>
+                      <p>{{ order.startDate }} 至 {{ order.endDate }}（{{ order.days }}天）</p>
+                      <p class="order-store">{{ order.store }}</p>
+                    </div>
+                    <div class="order-amount">
+                      <span class="amount">￥{{ moneyUtil.format(order.totalAmount) }}</span>
+                      <el-button
+                        type="primary"
+                        size="small"
+                        class="review-btn"
+                        @click.stop="openReviewDialog(order)"
+                      >
+                        {{ order.reviewStatus === 'unreviewed' ? '去评价' : '去追评' }}
+                      </el-button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <EmptyTips v-else text="暂无待评价订单" show-action action-text="去租车" @action="router.push('/vehicles')" />
             </template>
           </div>
 
@@ -131,7 +183,7 @@
                     class="verify-uploader"
                   >
                     <div class="upload-box">
-                      <img v-if="verifyForm.idCardFrontImg" :src="verifyForm.idCardFrontImg" class="upload-preview" />
+                      <img v-if="verifyForm.idCardFrontImg" :src="resolveClientImage(verifyForm.idCardFrontImg)" class="upload-preview" />
                       <div v-else class="upload-placeholder">
                         <el-icon :size="26"><Camera /></el-icon>
                         <span>身份证正面</span>
@@ -149,7 +201,7 @@
                     class="verify-uploader"
                   >
                     <div class="upload-box">
-                      <img v-if="verifyForm.idCardBackImg" :src="verifyForm.idCardBackImg" class="upload-preview" />
+                      <img v-if="verifyForm.idCardBackImg" :src="resolveClientImage(verifyForm.idCardBackImg)" class="upload-preview" />
                       <div v-else class="upload-placeholder">
                         <el-icon :size="26"><Camera /></el-icon>
                         <span>身份证背面</span>
@@ -196,7 +248,7 @@
                     class="verify-uploader"
                   >
                     <div class="upload-box">
-                      <img v-if="verifyForm.driverLicenseFrontImg" :src="verifyForm.driverLicenseFrontImg" class="upload-preview" />
+                      <img v-if="verifyForm.driverLicenseFrontImg" :src="resolveClientImage(verifyForm.driverLicenseFrontImg)" class="upload-preview" />
                       <div v-else class="upload-placeholder">
                         <el-icon :size="26"><Camera /></el-icon>
                         <span>驾驶证正面</span>
@@ -214,7 +266,7 @@
                     class="verify-uploader"
                   >
                     <div class="upload-box">
-                      <img v-if="verifyForm.driverLicenseBackImg" :src="verifyForm.driverLicenseBackImg" class="upload-preview" />
+                      <img v-if="verifyForm.driverLicenseBackImg" :src="resolveClientImage(verifyForm.driverLicenseBackImg)" class="upload-preview" />
                       <div v-else class="upload-placeholder">
                         <el-icon :size="26"><Camera /></el-icon>
                         <span>驾驶证背面</span>
@@ -270,6 +322,13 @@
               />
             </template>
           </div>
+          
+          <!-- 评价弹窗 -->
+          <ReviewDialog
+            v-model="reviewDialogVisible"
+            :order-id="reviewDialogOrderId"
+            @success="handleReviewSuccess"
+          />
         </div>
       </div>
     </div>
@@ -282,15 +341,31 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import EmptyTips from '@/components/EmptyTips/index.vue'
 import CouponCard from '@/components/CouponCard/index.vue'
+import ReviewDialog from '@/components/ReviewDialog/index.vue'
 import { useUserStore } from '@/stores'
 import { updateProfileApi, updateAvatarApi, uploadImageApi } from '@/api/modules/user'
 import { getMyCouponsApi } from '@/api/modules/coupon'
-import { getOrderListApi } from '@/api/modules/order'
+import { getOrderListApi, getReviewableOrdersApi } from '@/api/modules/order'
 import { moneyUtil } from '@/utils'
+import { resolveAdminImage, resolveClientImage } from '@/utils/image'
 
 const router = useRouter()
 const userStore = useUserStore()
 const activeTab = ref('info')
+
+// 评价弹窗
+const reviewDialogVisible = ref(false)
+const reviewDialogOrderId = ref(null)
+
+function openReviewDialog(order) {
+  reviewDialogOrderId.value = order.id
+  reviewDialogVisible.value = true
+}
+
+// 评价成功后刷新可评价订单列表
+async function handleReviewSuccess() {
+  await loadReviewableOrders()
+}
 
 const form = reactive({
   avatar: userStore.user?.avatar || '',
@@ -317,6 +392,26 @@ async function loadRecentOrders() {
     recentOrders.value = []
   } finally {
     orderLoading.value = false
+  }
+}
+
+// ============ 去评价（待首评 + 可追评订单）============
+const reviewableOrders = ref([])
+const reviewLoading = ref(false)
+const reviewableCount = ref(0)
+
+async function loadReviewableOrders() {
+  reviewLoading.value = true
+  try {
+    const res = await getReviewableOrdersApi()
+    reviewableOrders.value = res || []
+    reviewableCount.value = reviewableOrders.value.length
+  } catch (e) {
+    console.error('可评价订单加载失败', e)
+    reviewableOrders.value = []
+    reviewableCount.value = 0
+  } finally {
+    reviewLoading.value = false
   }
 }
 
@@ -485,6 +580,9 @@ watch(activeTab, async (tab) => {
   if (tab === 'orders' && !recentOrders.value.length) {
     await loadRecentOrders()
   }
+  if (tab === 'reviews') {
+    await loadReviewableOrders()
+  }
   if (tab === 'verify') {
     // 每次进入都从最新用户信息同步一次，避免本地表单与后端不一致
     syncVerifyFormFromUser()
@@ -534,7 +632,11 @@ async function handleAvatarUpload({ file }) {
 }
 
 onMounted(() => {
-  if (userStore.isLoggedIn) userStore.fetchUserInfo()
+  if (userStore.isLoggedIn) {
+    userStore.fetchUserInfo()
+    // 预加载可评价订单数量（用于侧边栏徽标显示）
+    loadReviewableOrders()
+  }
 })
 </script>
 
@@ -691,6 +793,49 @@ onMounted(() => {
     &.completed { color: $color-success; }
     &.cancelled { color: $color-text-tertiary; }
   }
+  .review-tag {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-medium;
+    padding: 2px 8px;
+    border-radius: $radius-none;
+    &.unreviewed { background: rgba(218, 41, 28, 0.12); color: var(--lux-primary-text); }
+    &.reviewed { background: rgba(76, 152, 185, 0.15); color: $color-info; }
+  }
+}
+
+// 侧边栏菜单项右侧计数胶囊（行内元素，垂直居中）
+.menu-count-badge {
+  margin-left: auto;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  line-height: 1;
+  color: #fff;
+  background: var(--lux-primary-text);
+  border-radius: $radius-full;
+}
+
+// 面板标题计数
+.panel-title-count {
+  display: inline-block;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  color: var(--lux-primary-text);
+  background: rgba(218, 41, 28, 0.12);
+  padding: 1px 8px;
+  border-radius: $radius-full;
+  margin-left: $space-xs;
+}
+
+// 可评价订单卡片
+.reviewable-card .review-btn {
+  margin-top: $space-xs;
 }
 .order-body {
   display: flex;

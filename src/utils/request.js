@@ -92,15 +92,23 @@ function rejectPendingQueue(error) {
 }
 
 /**
- * 刷新失败：倒计时 3 秒后跳转登录页
+ * 倒计时 3 秒后跳转登录页
  * 期间用户也可点击「立即跳转」按钮
+ * @param {Object} options
+ * @param {string} [options.title='登录过期'] 弹窗标题
+ * @param {string} [options.messagePrefix='登录状态已失效'] 倒计时文案前缀，最终展示为 `${messagePrefix}，${seconds} 秒后自动跳转登录页…`
  */
-function showCountdownRedirect() {
+function showCountdownRedirect(options = {}) {
   if (isRedirecting) return
   isRedirecting = true
 
+  const {
+    title = '登录过期',
+    messagePrefix = '登录状态已失效'
+  } = options
+
   let seconds = 3
-  const updateText = () => `登录状态已失效，${seconds} 秒后自动跳转登录页…`
+  const updateText = () => `${messagePrefix}，${seconds} 秒后自动跳转登录页…`
 
   const timer = setInterval(() => {
     seconds--
@@ -114,7 +122,7 @@ function showCountdownRedirect() {
     }
   }, 1000)
 
-  ElMessageBox.alert(updateText(), '登录过期', {
+  ElMessageBox.alert(updateText(), title, {
     confirmButtonText: '立即跳转',
     showCancelButton: false,
     showClose: false,
@@ -239,10 +247,13 @@ service.interceptors.response.use(
       return Promise.reject(error)
     }
 
-    // 403 无权限：仅弹提示，不跳登录（token 有效，只是无权访问）
+    // 403 无权限：提示用户并 3 秒后跳转登录页重新登录
     if (error.response && error.response.status === 403) {
-      if (!originalConfig?.skipBusinessError) {
-        ElMessage.error('暂无权限访问')
+      if (!originalConfig?.skipBusinessError && !isRedirecting) {
+        showCountdownRedirect({
+          title: '暂无权限访问',
+          messagePrefix: '暂无权限访问，请重新登录'
+        })
       }
       return Promise.reject(error)
     }

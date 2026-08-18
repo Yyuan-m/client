@@ -43,10 +43,19 @@ export default defineConfig({
         target: 'http://localhost:8089',
         changeOrigin: true
       },
-      // 头像等静态资源由后端 /uploads 提供
+      // 客户端服务静态资源（轮播图、品牌横幅、头像、评价图片、实名认证图片等）
+      // 由 8089 服务的 /uploads 目录提供
       '/uploads': {
         target: 'http://localhost:8089',
         changeOrigin: true
+      },
+      // 后台管理服务静态资源（车辆封面/相册等管理员上传资源）
+      // 由 8088 服务的 /uploads 目录提供，通过 resolveAdminImage 将 /uploads/ 前缀
+      // 替换为 /admin-uploads/，再在此处重写回 /uploads 转发到 8088
+      '/admin-uploads': {
+        target: 'http://localhost:8088',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/admin-uploads/, '/uploads')
       }
     }
   },

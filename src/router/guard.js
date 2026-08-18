@@ -4,7 +4,7 @@ import { useUserStore } from '@/stores/user'
 export function setupRouterGuard(router) {
   router.beforeEach((to, from, next) => {
     // 设置页面标题
-    document.title = to.meta.title ? `${to.meta.title} · LUXURY CAR` : 'LUXURY CAR · 豪华汽车租赁'
+    document.title = to.meta.title ? `${to.meta.title} · LUXURY CAR` : 'LUXURY CAR · 大圣玩车'
 
     const userStore = useUserStore()
 

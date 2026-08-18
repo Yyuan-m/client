@@ -1,8 +1,8 @@
 # LUXURY CAR Customer Client
 
-> 豪华汽车租赁平台 —— 用户端 Web 应用
+> 大圣玩车平台 —— 用户端 Web 应用
 
-基于 Vue 3 + Vite + Element Plus 构建的豪华汽车租赁用户端官网，提供车辆浏览、在线租车、订单管理、优惠券、个人中心等功能。
+基于 Vue 3 + Vite + Element Plus 构建的大圣玩车用户端官网，提供车辆浏览、在线租车、订单管理、优惠券、个人中心等功能。
 
 ## 技术栈
 

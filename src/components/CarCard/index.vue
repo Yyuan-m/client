@@ -1,11 +1,19 @@
 <template>
-  <div class="car-card" :class="{ 'is-rented': car.status === 'rented' }" @click="goDetail">
+  <div class="car-card" :class="{ 'is-unavailable': car.status !== 'available' }" @click="goDetail">
     <!-- 车辆图片 -->
     <div class="card-image">
-      <img :src="car.cover" :alt="car.name" loading="lazy" />
+      <img :src="resolveAdminImage(car.cover)" :alt="car.name" loading="lazy" />
       <span v-if="car.isHot" class="card-badge badge-hot">热门</span>
       <span v-else-if="car.isRecommend" class="card-badge badge-rec">推荐</span>
-      <span class="card-status" :class="car.status">{{ car.statusName }}</span>
+      <span v-if="car.couponBadge" class="card-badge badge-coupon">{{ car.couponBadge }}</span>
+      <el-tooltip
+        :disabled="!car.rentReason && !car.availableDate"
+        :content="rentStatusTip"
+        placement="top"
+        :show-after="150"
+      >
+        <span class="card-status" :class="car.status">{{ car.statusName }}</span>
+      </el-tooltip>
     </div>
 
     <!-- 车辆信息 -->
@@ -45,9 +53,9 @@
           <el-button
             type="primary"
             size="small"
-            :disabled="car.status === 'rented'"
+            :disabled="car.status !== 'available'"
             @click.stop="goRent"
-          >{{ car.status === 'rented' ? '已租出' : '立即租车' }}</el-button>
+          >{{ rentBtnText }}</el-button>
         </div>
       </div>
     </div>
@@ -57,6 +65,7 @@
 <script setup>
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { resolveAdminImage } from '@/utils/image'
 
 const props = defineProps({
   car: { type: Object, required: true }
@@ -71,6 +80,23 @@ const hasCouponPrice = computed(() => {
   const cp = props.car.couponPrice
   const dp = props.car.dailyPrice
   return cp != null && Number(cp) > 0 && Number(cp) < Number(dp)
+})
+
+// 被租状态提示文案：原因 + 最早可租日期
+const rentStatusTip = computed(() => {
+  const car = props.car
+  const parts = []
+  if (car.rentReason) parts.push(`原因：${car.rentReason}`)
+  if (car.availableDate) parts.push(`最早可租：${car.availableDate}`)
+  return parts.join('　')
+})
+
+// 租车按钮文案：按状态区分
+const rentBtnText = computed(() => {
+  const s = props.car.status
+  if (s === 'rented') return '已租出'
+  if (s === 'maintenance') return '维修中'
+  return '立即租车'
 })
 
 function goDetail() {
@@ -96,7 +122,7 @@ function goRent() {
     border-color: $color-primary;
   }
 
-  &.is-rented {
+  &.is-unavailable {
     opacity: 0.65;
     &:hover { transform: none; border-color: $color-border; }
   }
@@ -131,6 +157,7 @@ function goRent() {
 }
 .badge-hot { background: $color-accent; }
 .badge-rec { background: $color-primary; }
+.badge-coupon { background: #ff6b35; top: 40px; }
 
 .card-status {
   position: absolute;
@@ -145,6 +172,7 @@ function goRent() {
   backdrop-filter: blur(4px);
   &.available { color: $color-success; }
   &.rented { color: $color-danger; }
+  &.maintenance { color: $color-warning; }
 }
 
 .card-body {

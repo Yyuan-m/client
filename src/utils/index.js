@@ -47,7 +47,7 @@ export const dateUtil = {
     return dayjs().format('YYYY-MM-DD')
   },
   // 租期规则校验：是否满足最少/最长租期
-  validateRentDays(start, end, minDays = 1, maxDays = 30) {
+  validateRentDays(start, end, minDays = 1, maxDays = 20) {
     const days = this.daysBetween(start, end)
     if (days < minDays) return { valid: false, msg: `最少租期 ${minDays} 天` }
     if (days > maxDays) return { valid: false, msg: `最长租期 ${maxDays} 天` }
@@ -105,6 +105,18 @@ export const moneyUtil = {
   // 最终应付 = 租金 - 优惠券抵扣
   calcTotal(rent, couponDiscount = 0) {
     return Math.max(0, rent - couponDiscount)
+  },
+  // 批量叠加优惠券抵扣（v3，与后端 CouponService.calculateDiscountForOrderBatch 对齐）
+  // 规则：逐张按 calcCouponDiscount 计算，求和后不超过订单总额
+  // coupons: [{ type, value, minAmount, discountCap, stackable }, ...]
+  // 多张券时调用方需先校验所有券 stackable=1（除时长券不参与叠加），此处仅做金额计算
+  calcCouponDiscountBatch(amount, coupons) {
+    if (!coupons || !coupons.length || !amount) return 0
+    let total = 0
+    for (const c of coupons) {
+      total += this.calcCouponDiscount(amount, c)
+    }
+    return Math.min(total, amount)
   }
 }
 

@@ -7,6 +7,9 @@
         <el-descriptions :column="2" border>
           <el-descriptions-item label="订单号">{{ order.orderNo }}</el-descriptions-item>
           <el-descriptions-item label="订单状态">{{ order.statusName }}</el-descriptions-item>
+          <el-descriptions-item v-if="order.status === 'completed'" label="评价状态">
+            <span class="review-status-text" :class="order.reviewStatus">{{ order.reviewStatusName }}</span>
+          </el-descriptions-item>
           <el-descriptions-item label="车辆">{{ order.carName }}</el-descriptions-item>
           <el-descriptions-item label="租期">{{ order.startDate }} 至 {{ order.endDate }}（{{ order.days }}天）</el-descriptions-item>
           <el-descriptions-item label="取车门店">{{ order.store }}</el-descriptions-item>
@@ -25,10 +28,23 @@
           <el-button @click="$router.back()">返回</el-button>
           <el-button v-if="order.status === 'pending'" type="primary" :disabled="countdownText === '00:00'" @click="handlePay">立即支付</el-button>
           <el-button v-if="order.status === 'renting'" type="primary" @click="handleRenew">续租</el-button>
+          <el-button v-if="order.status === 'renting'" type="success" @click="handleComplete">确认还车</el-button>
+          <el-button
+            v-if="order.status === 'completed' && (order.reviewStatus === 'unreviewed' || order.reviewStatus === 'reviewed')"
+            type="primary"
+            @click="openReviewDialog"
+          >{{ order.reviewStatus === 'unreviewed' ? '去评价' : '去追评' }}</el-button>
           <el-button v-if="order.status === 'pending'" type="danger" @click="handleCancel">取消订单</el-button>
         </div>
       </template>
       <EmptyTips v-else text="订单不存在" show-action action-text="返回订单列表" @action="$router.push('/orders')" />
+
+      <!-- 评价弹窗 -->
+      <ReviewDialog
+        v-model="reviewDialogVisible"
+        :order-id="reviewDialogOrderId"
+        @success="handleReviewSuccess"
+      />
     </div>
   </div>
 </template>
@@ -40,13 +56,28 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Timer } from '@element-plus/icons-vue'
 import PageSkeleton from '@/components/PageSkeleton/index.vue'
 import EmptyTips from '@/components/EmptyTips/index.vue'
-import { getOrderDetailApi, cancelOrderApi, payOrderApi } from '@/api/modules/order'
+import ReviewDialog from '@/components/ReviewDialog/index.vue'
+import { getOrderDetailApi, cancelOrderApi, payOrderApi, completeOrderApi } from '@/api/modules/order'
 import { moneyUtil } from '@/utils'
 
 const route = useRoute()
 const router = useRouter()
 const loading = ref(true)
 const order = ref(null)
+
+// 评价弹窗
+const reviewDialogVisible = ref(false)
+const reviewDialogOrderId = ref(null)
+
+function openReviewDialog() {
+  reviewDialogOrderId.value = order.value?.id
+  reviewDialogVisible.value = true
+}
+
+// 评价成功后刷新订单详情
+async function handleReviewSuccess() {
+  await loadDetail()
+}
 
 // ---------- 支付倒计时（5分钟）----------
 const PAY_TIMEOUT = 5 * 60 * 1000 // 5分钟，单位毫秒
@@ -143,11 +174,39 @@ async function handleCancel() {
   }
 }
 
+// 确认还车：租赁中 → 已完成，置评价状态为待评价
+async function handleComplete() {
+  try {
+    await ElMessageBox.confirm('确认已归还车辆吗？确认后订单将变为已完成，可进行评价。', '确认还车', {
+      type: 'warning',
+      confirmButtonText: '确认还车',
+      cancelButtonText: '再想想'
+    })
+  } catch {
+    return
+  }
+  try {
+    await completeOrderApi(order.value.id)
+    ElMessage.success('还车成功，欢迎评价本次服务')
+    await loadDetail()
+  } catch (e) {
+    console.error('确认还车失败', e)
+  }
+}
+
 onMounted(loadDetail)
 onBeforeUnmount(stopCountdown)
 </script>
 
 <style lang="scss" scoped>
+// 评价状态文字
+.review-status-text {
+  font-weight: $font-weight-medium;
+  &.unreviewed { color: $color-warning; }
+  &.reviewed { color: $color-info; }
+  &.final_reviewed { color: $color-success; }
+}
+
 .pay-countdown {
   margin-top: $space-lg;
   text-align: center;

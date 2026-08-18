@@ -2,7 +2,7 @@
   <div class="auth-page">
     <div class="auth-container">
       <!-- 左侧品牌视觉区 -->
-      <div class="auth-left">
+      <div class="auth-left" :style="{ background: 'url(' + resolveClientImage('/uploads/banners/login_bg.jpg') + ') center/cover no-repeat' }">
         <div class="auth-left-overlay"></div>
         <div class="auth-left-content">
           <router-link to="/" class="auth-logo">
@@ -53,6 +53,7 @@ import { ElMessage } from 'element-plus'
 import { User, Lock, CircleCheckFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores'
 import { storage } from '@/utils'
+import { resolveClientImage } from '@/utils/image'
 
 const router = useRouter()
 const route = useRoute()
@@ -120,7 +121,6 @@ async function handleLogin() {
 // ---------- 左侧品牌区 ----------
 .auth-left {
   position: relative;
-  background: url('/uploads/banners/login_bg.jpg') center/cover no-repeat;
   display: flex;
   align-items: flex-end;
   @include respond-to('md') { display: none; }

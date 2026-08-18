@@ -1,7 +1,7 @@
 <template>
   <div class="cart-page section">
     <div class="container">
-      <h2 class="section-title">租车购物车</h2>
+      <h2 class="section-title">购物车</h2>
       <p class="section-subtitle">{{ cartStore.totalCount }} 台车辆，已选 {{ cartStore.selectedCount }} 台</p>
 
       <!-- 未登录提示 -->
@@ -23,7 +23,7 @@
               class="item-check"
               @change="cartStore.toggleSelect(item.carId)"
             />
-            <img :src="item.cover" :alt="item.carName" class="item-img" @click="$router.push(`/vehicles/${item.carId}`)" />
+            <img :src="resolveAdminImage(item.cover)" :alt="item.carName" class="item-img" @click="$router.push(`/vehicles/${item.carId}`)" />
             <div class="item-info">
               <h3 class="item-name" @click="$router.push(`/vehicles/${item.carId}`)">{{ item.carName }}</h3>
               <div v-if="item.tags?.length" class="item-tags">
@@ -47,7 +47,7 @@
             <div class="item-actions">
               <div class="item-amount" v-if="priceDetailOf(item.carId)">￥{{ moneyUtil.format(priceDetailOf(item.carId).totalAmount) }}</div>
               <div class="item-amount" v-else>—</div>
-              <el-button type="danger" text :icon="Delete" @click="handleRemove(item)">移除</el-button>
+              <el-button type="danger" text :icon="Delete" class="remove-btn" @click="handleRemove(item)">移除</el-button>
             </div>
           </div>
 
@@ -83,6 +83,7 @@ import { Delete } from '@element-plus/icons-vue'
 import EmptyTips from '@/components/EmptyTips/index.vue'
 import { useCartStore, useUserStore } from '@/stores'
 import { moneyUtil } from '@/utils'
+import { resolveAdminImage } from '@/utils/image'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -275,6 +276,24 @@ async function handleRemove(item) {
     font-size: $font-size-lg;
     font-weight: $font-weight-medium;
     color: var(--lux-primary-text);
+  }
+}
+
+// 移除按钮：text 类型 danger 默认色偏淡，在卡片背景(#242424 / #f5f5f5)上易混淆
+// 显式用 danger 色作文字色，hover/active 用主题品牌红文字变量 + 淡红背景增强对比与反馈
+.remove-btn {
+  color: $color-danger !important;
+  --el-button-text-color: #{$color-danger} !important;
+  font-weight: $font-weight-medium;
+  &:hover {
+    color: var(--lux-primary-text) !important;
+    --el-button-hover-text-color: var(--lux-primary-text) !important;
+    background: rgba(241, 58, 44, 0.12) !important;
+  }
+  &:active {
+    color: $color-primary-active !important;
+    --el-button-active-text-color: #{$color-primary-active} !important;
+    background: rgba(241, 58, 44, 0.18) !important;
   }
 }
 
