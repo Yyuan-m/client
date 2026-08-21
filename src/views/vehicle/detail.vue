@@ -32,7 +32,8 @@
               <span><el-icon><Lightning /></el-icon>{{ car.displacement }}</span>
               <span v-if="car.year"><el-icon><Calendar /></el-icon>{{ car.year }}款</span>
               <span><el-icon><Star /></el-icon>{{ car.rating }}分</span>
-              <span><el-icon><TrendCharts /></el-icon>已租{{ car.rentalCount }}次</span>
+              <span><el-icon><TrendCharts /></el-icon>已租 <em :class="['stat-badge', 'stat-' + rentCountLevel()]">{{ car.rentCount || 0 }}</em> 次</span>
+              <span v-if="car.rentDays"><el-icon><Clock /></el-icon>累计已租 <em :class="['stat-badge', 'stat-' + rentDaysLevel()]">{{ car.rentDays }}</em> 天</span>
             </div>
             <p class="detail-desc">{{ car.description }}</p>
 
@@ -87,7 +88,7 @@
           <div class="info-right">
             <div class="rent-card">
               <div class="rent-price">
-                <!-- 有券后价：原价划线 + 券后价突出（标注起步天数） -->
+                <!-- 有券后价：原价划线 + 券后价突出（标注券后价起步天数） -->
                 <template v-if="hasCouponPrice">
                   <div class="price-original-line">
                     <span class="unit">￥</span>
@@ -101,11 +102,11 @@
                       <span class="amount">{{ car.couponPrice }}</span>
                       <span class="unit">/天</span>
                     </span>
-                    <span v-if="effectiveMinDays >= 1" class="coupon-min-days">{{ effectiveMinDays }}天起</span>
+                    <span v-if="couponStartDays >= 1" class="coupon-min-days">{{ couponStartDays }}天起</span>
                   </div>
                   <div class="coupon-hint">实际抵扣以结算页为准</div>
                 </template>
-                <!-- 无券后价：仅显示原价 -->
+                <!-- 无券后价：仅显示原价 + 车辆最小起租天数 -->
                 <template v-else>
                   <span class="unit">￥</span>
                   <span class="amount">{{ car.dailyPrice }}</span>
@@ -113,8 +114,15 @@
                   <span v-if="effectiveMinDays >= 1" class="coupon-min-days standalone">{{ effectiveMinDays }}天起</span>
                 </template>
               </div>
+              <!-- 最大租期着重展示 -->
+              <div class="max-rent-tip" :class="{ unlimited: !hasMaxRentLimit }">
+                <el-icon><Timer /></el-icon>
+                <span>{{ maxRentText }}</span>
+              </div>
               <!-- 长租折扣提示 -->
               <div v-if="discountTip" class="discount-tip">{{ discountTip }}</div>
+              <!-- 月租折扣不可达提示 -->
+              <div v-if="monthlyUnavailableTip" class="monthly-unavailable-tip">{{ monthlyUnavailableTip }}</div>
               <!-- 节假日溢价提示（未选日期时也能看到溢价规则） -->
               <div v-if="holidayTip" class="holiday-tip">{{ holidayTip }}</div>
               <!-- 已出租/已预约车辆的可租提示 -->
@@ -122,7 +130,7 @@
                 <el-icon><WarningFilled /></el-icon>
                 <span>{{ rentedNotice }}</span>
               </div>
-              <DateRentPicker v-model="dateRange" :min-days="effectiveMinDays" :max-days="20" :min-date="car.availableDate" @change="onDateChange" />
+              <DateRentPicker v-model="dateRange" :min-days="effectiveMinDays" :max-days="effectiveMaxDays" :min-date="car.availableDate" @change="onDateChange" />
               <div v-if="rentDays > 0" class="rent-summary">
                 <!-- 价格加载中 -->
                 <div v-if="priceLoading" class="price-loading">
@@ -200,7 +208,7 @@ import { useScrollReveal } from '@/composables/useScrollReveal'
 import { getCarDetailApi, getCarImagesApi } from '@/api/modules/car'
 import { calcCarPriceApi } from '@/api/modules/price'
 import { useAppStore, useUserStore, useCartStore } from '@/stores'
-import { moneyUtil } from '@/utils'
+import { moneyUtil, dateUtil } from '@/utils'
 import { resolveAdminImage } from '@/utils/image'
 
 const route = useRoute()
@@ -229,22 +237,75 @@ const hasCouponPrice = computed(() => {
   return cp != null && Number(cp) > 0 && Number(cp) < Number(dp)
 })
 
+// 券后价起步天数 = max(券门槛天数 couponMinDays, 车辆最小租期 effectiveMinDays)
+// 仅在有券后价时使用；无券时不展示
+const couponStartDays = computed(() => {
+  if (!car.value) return 1
+  const couponMin = Number(car.value.couponMinDays) || 0
+  return Math.max(couponMin, effectiveMinDays.value)
+})
+
 // 实际最小起租天数（车辆级 minRentDays 字段，至少为 1）
 const effectiveMinDays = computed(() => {
   if (!car.value) return 1
   return Math.max(1, Number(car.value.minRentDays) || 1)
 })
 
+// 实际最大租期天数（车辆级 maxRentDays 字段；null 表示不限租期）
+const effectiveMaxDays = computed(() => {
+  if (!car.value) return null
+  const max = Number(car.value.maxRentDays)
+  return max > 0 ? max : null
+})
+
+// 是否限制最大租期（用于"不限租期"徽标展示）
+const hasMaxRentLimit = computed(() => effectiveMaxDays.value != null)
+
+// 最大租期展示文案（着重展示用）
+const maxRentText = computed(() => {
+  if (hasMaxRentLimit.value) return `最长可租 ${effectiveMaxDays.value} 天`
+  return '租期不限'
+})
+
 // 长租折扣提示（基于车辆字段展示，未选日期时也能看到）
+// 联动车辆最大租期：若车辆最大租期不足 30 天，则月租折扣不可达；不足 7 天则周租折扣不可达
 const discountTip = computed(() => {
   if (!car.value) return ''
   const weekly = Number(car.value.weeklyDiscount || 1)
   const monthly = Number(car.value.monthlyDiscount || 1)
+  const maxDays = effectiveMaxDays.value
   const parts = []
-  if (weekly < 1) parts.push(`7天及以上 ${weeklyToText(weekly)}`)
-  if (monthly < 1) parts.push(`30天及以上 ${weeklyToText(monthly)}`)
+  if (weekly < 1 && (maxDays == null || maxDays >= 7)) parts.push(`7天及以上 ${weeklyToText(weekly)}`)
+  if (monthly < 1 && (maxDays == null || maxDays >= 30)) parts.push(`30天及以上 ${weeklyToText(monthly)}`)
   return parts.join(' · ')
 })
+
+// 月租折扣不可达提示（车辆最大租期 < 30 天但配置了月租折扣时提示）
+const monthlyUnavailableTip = computed(() => {
+  if (!car.value) return ''
+  const monthly = Number(car.value.monthlyDiscount || 1)
+  const maxDays = effectiveMaxDays.value
+  if (monthly < 1 && maxDays != null && maxDays < 30) {
+    return `本车最长租期 ${maxDays} 天，不适用月租折扣`
+  }
+  return ''
+})
+// 已租次数等级：>50 着重(high) | 10<x<=50 次重(mid) | <=10 轻微(low)
+function rentCountLevel() {
+  const v = Number(car.value?.rentCount) || 0
+  if (v > 50) return 'high'
+  if (v > 10) return 'mid'
+  return 'low'
+}
+
+// 已租天数等级：>500 着重(high) | 50<x<=500 次重(mid) | <=50 轻微(low)
+function rentDaysLevel() {
+  const v = Number(car.value?.rentDays) || 0
+  if (v > 500) return 'high'
+  if (v > 50) return 'mid'
+  return 'low'
+}
+
 function weeklyToText(factor) {
   const t = factor * 10
   return `${Number.isInteger(t) ? t : t.toFixed(1)}折`
@@ -286,6 +347,18 @@ function onDateChange({ days, valid }) {
   rentDays.value = valid ? days : 0
 }
 
+// 租期校验错误信息：已选日期但无效时给出准确原因（不足最少天数 / 超过最大租期）
+const rentErrorMsg = computed(() => {
+  const range = dateRange.value
+  if (!range || range.length < 2) return ''
+  const days = dateUtil.daysBetween(range[0], range[1])
+  if (days < effectiveMinDays.value) return `最少需租 ${effectiveMinDays.value} 天`
+  if (effectiveMaxDays.value != null && days > effectiveMaxDays.value) {
+    return `最长只能租 ${effectiveMaxDays.value} 天`
+  }
+  return ''
+})
+
 // 日期变化时重新拉取价格
 watch([() => car.value?.id, rentDays, dateRange], async () => {
   if (!car.value || rentDays.value === 0 || !dateRange.value?.length) {
@@ -324,7 +397,8 @@ async function goCheckout() {
     return
   }
   if (rentDays.value === 0) {
-    ElMessage.warning('请选择租车日期')
+    // 已选日期但无效时给出准确原因；未选日期时提示先选日期
+    ElMessage.warning(rentErrorMsg.value || '请选择租车日期')
     return
   }
   // 已出租车辆：校验起租日期不早于最早可租日期
@@ -346,11 +420,8 @@ async function addToCart() {
     return
   }
   if (rentDays.value === 0) {
-    if (effectiveMinDays.value > 1) {
-      ElMessage.warning(`请选择租车日期，需至少租 ${effectiveMinDays.value} 天起`)
-    } else {
-      ElMessage.warning('请选择租车日期')
-    }
+    // 已选日期但无效时给出准确原因；未选日期时提示先选日期
+    ElMessage.warning(rentErrorMsg.value || (effectiveMinDays.value > 1 ? `请选择租车日期，需至少租 ${effectiveMinDays.value} 天起` : '请选择租车日期'))
     return
   }
   // 已出租车辆：校验起租日期不早于最早可租日期
@@ -458,6 +529,29 @@ onMounted(loadDetail)
   span { font-size: $font-size-sm; color: $color-text-secondary; display: flex; align-items: center; gap: 4px; }
 }
 
+// 已租次数/天数分级徽标：high 着重、mid 次重、low 轻微
+.stat-badge {
+  font-style: normal;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  line-height: 1.5;
+}
+.stat-high {
+  color: #fff;
+  background: linear-gradient(135deg, #ff2e2e, #d81e1e);
+  box-shadow: 0 2px 8px rgba(255, 46, 46, 0.35);
+}
+.stat-mid {
+  color: #8a4b00;
+  background: #ffe9c2;
+  border: 1px solid #ffc069;
+}
+.stat-low {
+  color: #8f959e;
+  background: #f0f2f5;
+}
+
 .detail-desc {
   font-size: $font-size-base;
   color: $color-text-secondary;
@@ -520,13 +614,17 @@ onMounted(loadDetail)
 .rent-price {
   color: var(--lux-primary-text);
   margin-bottom: $space-base;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 8px;
   .unit { font-size: $font-size-sm; }
   .amount { font-size: $font-size-3xl; font-weight: $font-weight-medium; }
   // 券后价样式
   .price-original-line {
     display: flex;
     align-items: baseline;
-    gap: 1px;
+    gap: 2px;
     color: $color-text-tertiary;
     .amount-original {
       font-size: $font-size-md;
@@ -538,7 +636,7 @@ onMounted(loadDetail)
     display: flex;
     align-items: baseline;
     flex-wrap: wrap;
-    gap: 2px 4px;
+    gap: 4px 8px;
     margin-top: 2px;
     .coupon-tag {
       font-size: 10px;
@@ -555,7 +653,7 @@ onMounted(loadDetail)
     .price-main {
       display: inline-flex;
       align-items: baseline;
-      gap: 1px;
+      gap: 2px;
       white-space: nowrap;
       flex-shrink: 0;
     }
@@ -573,10 +671,11 @@ onMounted(loadDetail)
       white-space: nowrap;
       flex-shrink: 0;
       // 无券后价时独立展示，加左外边距与价格分隔
-      &.standalone { margin-left: 6px; }
+      &.standalone { margin-left: 4px; }
     }
   }
   .coupon-hint {
+    width: 100%;
     font-size: 10px;
     color: $color-text-tertiary;
     margin-top: 2px;
@@ -626,6 +725,40 @@ onMounted(loadDetail)
   background: rgba(218, 41, 28, 0.08);
   padding: $space-xs $space-sm;
   border-left: 2px solid var(--lux-primary-text);
+  letter-spacing: 0.3px;
+}
+
+// 最大租期着重展示（有限制时红色高亮；不限租期时绿色弱化）
+.max-rent-tip {
+  display: flex;
+  align-items: center;
+  gap: $space-xs;
+  margin-top: $space-xs;
+  margin-bottom: $space-sm;
+  font-size: $font-size-sm;
+  font-weight: $font-weight-bold;
+  color: #fff;
+  background: linear-gradient(135deg, #ff2e2e, #d81e1e);
+  padding: $space-xs $space-sm;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+  .el-icon { line-height: 1; flex-shrink: 0; }
+  &.unlimited {
+    color: #0e6b2e;
+    background: rgba(14, 107, 46, 0.1);
+    font-weight: $font-weight-medium;
+  }
+}
+
+// 月租折扣不可达提示（车辆最大租期不足 30 天）
+.monthly-unavailable-tip {
+  margin-top: $space-xs;
+  margin-bottom: $space-sm;
+  font-size: $font-size-xs;
+  color: $color-text-secondary;
+  background: rgba(0, 0, 0, 0.04);
+  padding: $space-xs $space-sm;
+  border-left: 2px solid $color-text-tertiary;
   letter-spacing: 0.3px;
 }
 

@@ -28,7 +28,8 @@ import { dateUtil } from '@/utils'
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   minDays: { type: Number, default: 1 },
-  maxDays: { type: Number, default: 20 },
+  // 最大租期天数；null 表示不限（车辆级 maxRentDays 为空时不限制）
+  maxDays: { type: Number, default: null },
   // 最早可租日期（YYYY-MM-DD 字符串或 Date）：用于已出租/已预约车辆，禁用该日期之前的所有日期
   minDate: { type: [String, Date], default: null }
 })
@@ -39,16 +40,18 @@ const dateRange = ref(props.modelValue)
 const days = ref(0)
 const error = ref('')
 
-// 快捷选项：根据 minDays 动态过滤，低于起租天数的选项不展示
+// 快捷选项：根据 minDays/maxDays 动态过滤；maxDays 为 null 时不设上限
 const shortcuts = computed(() => {
   const all = [
     { text: '3天', days: 3 },
     { text: '7天', days: 7 },
     { text: '15天', days: 15 },
-    { text: '20天', days: 20 }
+    { text: '20天', days: 20 },
+    { text: '30天', days: 30 }
   ]
   return all
-    .filter(s => s.days >= props.minDays && s.days <= props.maxDays)
+    .filter(s => s.days >= props.minDays)
+    .filter(s => props.maxDays == null || s.days <= props.maxDays)
     .map(s => ({
       text: s.text,
       value: () => {

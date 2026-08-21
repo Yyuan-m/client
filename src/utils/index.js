@@ -46,11 +46,11 @@ export const dateUtil = {
   today() {
     return dayjs().format('YYYY-MM-DD')
   },
-  // 租期规则校验：是否满足最少/最长租期
-  validateRentDays(start, end, minDays = 1, maxDays = 20) {
+  // 租期规则校验：是否满足最少/最长租期（maxDays 传 null 表示不限）
+  validateRentDays(start, end, minDays = 1, maxDays = null) {
     const days = this.daysBetween(start, end)
     if (days < minDays) return { valid: false, msg: `最少租期 ${minDays} 天` }
-    if (days > maxDays) return { valid: false, msg: `最长租期 ${maxDays} 天` }
+    if (maxDays != null && days > maxDays) return { valid: false, msg: `最长租期 ${maxDays} 天` }
     return { valid: true, days }
   }
 }
