@@ -7,6 +7,8 @@ export const getOrderDetailApi = (id) => get(`/api/order/detail/${id}`)
 export const cancelOrderApi = (id) => put(`/api/order/cancel/${id}`)
 // 订单支付（待支付 → 租赁中）
 export const payOrderApi = (id) => put(`/api/order/pay/${id}`)
+// 批量支付（多车合并结算，一次性支付同一批次创建的多个待支付订单）
+export const payOrderBatchApi = (orderIds) => put('/api/order/pay-batch', { orderIds })
 // 确认还车（租赁中 → 已完成，置评价状态为待评价）
 export const completeOrderApi = (id) => put(`/api/order/complete/${id}`)
 // 我的进行中订单（首页"我的订单"模块用：租赁中 + 待评价）

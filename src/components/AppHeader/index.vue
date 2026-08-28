@@ -45,8 +45,8 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
-        <router-link to="/about" class="nav-link" :class="{ active: isActive('/about') }">关于我们</router-link>
-        <router-link to="/contact" class="nav-link" :class="{ active: isActive('/contact') }">联系客服</router-link>
+        <router-link to="/about" class="nav-link nav-secondary" :class="{ active: isActive('/about') }">关于我们</router-link>
+        <router-link to="/contact" class="nav-link nav-secondary" :class="{ active: isActive('/contact') }">联系客服</router-link>
       </nav>
 
       <!-- 右侧操作 -->
@@ -196,6 +196,12 @@ async function handleUserCommand(command) {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: $space-xs;
+  min-width: 0;
+}
+
+.logo {
+  flex-shrink: 0;
 }
 
 .logo-text {
@@ -204,12 +210,15 @@ async function handleUserCommand(command) {
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: $color-text;
+  // 禁止换行，窄屏逐级压缩字距/字号而非挤压换行
+  white-space: nowrap;
 }
 
 .nav-menu {
   display: flex;
   align-items: center;
   gap: $space-lg;
+  min-width: 0;
 }
 
 .nav-link {
@@ -218,6 +227,8 @@ async function handleUserCommand(command) {
   display: inline-flex;
   align-items: center;
   gap: $space-xxxs;
+  // 中文逐字竖排问题的根源：窄屏必须禁止换行
+  white-space: nowrap;
   transition: color $transition-fast;
   cursor: pointer;
   &:hover { color: var(--lux-primary-text); }
@@ -282,6 +293,7 @@ async function handleUserCommand(command) {
 .header-btn {
   padding: 6px 20px;
   font-size: $font-size-sm;
+  white-space: nowrap;
 }
 
 .user-info {
@@ -289,6 +301,7 @@ async function handleUserCommand(command) {
   align-items: center;
   gap: 5px;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .user-name {
@@ -298,10 +311,31 @@ async function handleUserCommand(command) {
   @include ellipsis;
 }
 
+// ---------- 响应式：逐级压缩，保证任何宽度下文字单行不换行 ----------
 @include respond-to('md') {
   .nav-menu { gap: $space-md; }
   .nav-link { font-size: $font-size-xs; }
   .user-name { display: none; }
+  .header-actions { gap: $space-xxs; }
+  .header-btn { padding: 6px 14px; }
+  .logo-text { letter-spacing: 0.04em; }
+}
+
+@include respond-to('sm') {
+  .header-inner { padding: 0 $space-xxs; gap: $space-xxs; }
+  .logo-text { font-size: $font-size-sm; letter-spacing: 0.02em; }
+  .nav-menu { gap: 10px; }
+  .nav-link { font-size: 12px; gap: 2px; }
+  // 下拉箭头占位有限，窄屏隐藏
+  .nav-arrow { display: none; }
+  .header-btn { padding: 5px 10px; font-size: $font-size-xs; }
+  .anno-dot { min-width: 14px; height: 14px; }
+}
+
+// 极窄屏：隐藏次要导航（关于我们/联系客服，页脚仍可访问），保留核心导航不溢出
+@media (max-width: 480px) {
+  .nav-secondary { display: none; }
+  .nav-menu { gap: 8px; }
 }
 </style>
 

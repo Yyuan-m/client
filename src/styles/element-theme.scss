@@ -180,11 +180,25 @@ html.dark {
       color: #fff !important;
     }
   }
-  &--danger {
+  &--danger:not(.is-plain) {
     color: #fff !important;
     --el-button-text-color: #fff !important;
     --el-button-hover-text-color: #fff !important;
     --el-button-active-text-color: #fff !important;
+  }
+  // plain danger（如"取消预约"）：底色/边框/文字全部主题感知，
+  // 暗色为深红底+亮红字，亮色为浅红底+深红字；悬停回到红底白字
+  &--danger.is-plain {
+    color: var(--lux-primary-text) !important;
+    --el-button-text-color: var(--lux-primary-text) !important;
+    background-color: rgba(241, 58, 44, 0.12) !important;
+    border-color: rgba(241, 58, 44, 0.45) !important;
+    &:hover,
+    &:active {
+      color: #fff !important;
+      background-color: $color-danger !important;
+      border-color: $color-danger !important;
+    }
   }
   &--success {
     color: #fff !important;

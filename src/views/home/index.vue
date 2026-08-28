@@ -241,7 +241,7 @@
     </section>
 
     <!-- 7. 预约咨询 -->
-    <section class="section appointment fade-in-up">
+    <section id="appointment" class="section appointment fade-in-up">
       <div class="container">
         <div class="appointment-card">
           <div class="appointment-left">
@@ -271,6 +271,16 @@
               <el-form-item label="取车日期">
                 <el-date-picker v-model="form.date" type="date" placeholder="选择取车日期" style="width: 100%" value-format="YYYY-MM-DD" />
               </el-form-item>
+              <el-form-item label="留言内容">
+                <el-input
+                  v-model="form.content"
+                  type="textarea"
+                  :rows="3"
+                  maxlength="500"
+                  show-word-limit
+                  placeholder="请输入您的需求或留言（选填）"
+                />
+              </el-form-item>
               <el-button type="primary" size="large" @click="submitAppointment" :loading="submitting">提交预约</el-button>
             </el-form>
           </div>
@@ -289,7 +299,7 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import CarCard from '@/components/CarCard/index.vue'
 import CouponCard from '@/components/CouponCard/index.vue'
@@ -307,6 +317,7 @@ import { getMyActiveOrdersApi } from '@/api/modules/order'
 import { resolveAdminImage, resolveClientImage } from '@/utils/image'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const appStore = useAppStore()
 const { config, loadConfig } = useSystemConfig()
@@ -522,7 +533,7 @@ function scrollOrders(direction) {
 const brandImg = '/uploads/banners/brand.jpg'
 
 // 预约表单
-const form = ref({ name: '', phone: '', carType: '', date: '' })
+const form = ref({ name: '', phone: '', carType: '', date: '', content: '' })
 const submitting = ref(false)
 const loading = ref(true)
 
@@ -550,7 +561,9 @@ async function loadData() {
     if (carousel.value.length) {
       nextTick(() => startMainProgress())
     }
-    hotCars.value = results[1] || []
+    // 首页「热门车型推荐」只展示当前可租车辆（status==='available'）；
+    // 「查看全部车辆」走车辆列表接口展示全部，不受此过滤影响
+    hotCars.value = (results[1] || []).filter((c) => c.status === 'available')
     advantages.value = results[2] || []
     reviews.value = results[3] || []
     // 评价渲染后检测哪些内容被截断（用于显示展开按钮）
@@ -580,7 +593,31 @@ async function loadData() {
     ElMessage.error('数据加载失败，请刷新重试')
   } finally {
     loading.value = false
+    // 从个人中心等其他页面带 #锚点跳转首页（如「去预约」/「去领券」）：
+    // 异步数据渲染会改变页面高度，必须在数据就绪后再精确滚动到目标区块
+    scrollToHashAnchor()
   }
+}
+
+// 首页顶部固定导航高度（与 AppHeader $header-height 保持一致）
+const HEADER_HEIGHT = 64
+// 滚动后目标区块与导航底部的间距
+const ANCHOR_MARGIN = 16
+
+// 页面数据加载完成后，按 URL #锚点定位到首页对应区块
+function scrollToHashAnchor() {
+  const hash = route.hash
+  if (!hash || hash === '#top') return
+  const hasTarget = () => Boolean(document.querySelector(hash))
+  if (!hasTarget()) return
+  nextTick(() => {
+    setTimeout(() => {
+      const el = document.querySelector(hash)
+      if (!el) return
+      const elementTop = el.getBoundingClientRect().top + window.scrollY
+      window.scrollTo({ top: elementTop - HEADER_HEIGHT - ANCHOR_MARGIN, behavior: 'smooth' })
+    }, 100)
+  })
 }
 
 // 领取优惠券
@@ -643,10 +680,15 @@ async function submitAppointment() {
       name: form.value.name,
       phone: form.value.phone,
       carType: form.value.carType,
-      rentDate: form.value.date
+      rentDate: form.value.date,
+      content: form.value.content?.trim() || undefined
     })
-    ElMessage.success('预约成功，客服将尽快联系您')
-    form.value = { name: '', phone: '', carType: '', date: '' }
+    ElMessage.success(
+      userStore.isLoggedIn
+        ? '预约成功，可在「个人中心 - 我的预约」查看处理进度'
+        : '预约成功，客服将尽快联系您（登录后可在个人中心查看预约进度）'
+    )
+    form.value = { name: '', phone: '', carType: '', date: '', content: '' }
   } catch (e) {
     console.error('预约提交失败', e)
   } finally {

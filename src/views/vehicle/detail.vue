@@ -199,7 +199,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Loading, WarningFilled, PictureFilled } from '@element-plus/icons-vue'
 import PageSkeleton from '@/components/PageSkeleton/index.vue'
 import EmptyTips from '@/components/EmptyTips/index.vue'
@@ -390,12 +390,37 @@ function previewMaterial(images, index) {
   appStore.openImagePreview(images.map(resolveAdminImage), index)
 }
 
+// 实名认证拦截：未完成实名与驾驶证认证时只能看车选车，不能下单
+// 返回 true 表示已认证可继续，false 表示已弹窗拦截
+async function checkVerified() {
+  if (userStore.user?.verifyStatus === 'verified') return true
+  // 本地缓存可能过期，刷新一次用户信息确保认证状态准确
+  try {
+    await userStore.fetchUserInfo()
+  } catch (e) {
+    console.error('刷新用户信息失败', e)
+  }
+  if (userStore.user?.verifyStatus === 'verified') return true
+  try {
+    await ElMessageBox.confirm(
+      '需要完成实名与驾驶证信息认证后才能下单租车，是否现在去认证？',
+      '实名认证提示',
+      { confirmButtonText: '去认证', cancelButtonText: '暂不认证', type: 'warning' }
+    )
+    router.push({ path: '/profile', query: { tab: 'verify' } })
+  } catch {
+    // 用户取消，不做处理
+  }
+  return false
+}
+
 async function goCheckout() {
   if (!userStore.isLoggedIn) {
     ElMessage.warning('请先登录后再租车')
     router.push({ path: '/login', query: { redirect: route.fullPath } })
     return
   }
+  if (!(await checkVerified())) return
   if (rentDays.value === 0) {
     // 已选日期但无效时给出准确原因；未选日期时提示先选日期
     ElMessage.warning(rentErrorMsg.value || '请选择租车日期')

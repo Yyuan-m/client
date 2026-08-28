@@ -2,6 +2,8 @@
 import { get, post, put, upload } from '@/utils/request'
 
 export const updateProfileApi = (data) => put('/api/user/profile', data)
+// 提交实名认证（进入人工审核），提交后 verifyStatus -> pending
+export const submitVerifyApi = (data) => post('/api/user/verify', data)
 export const updateAvatarApi = (file) => upload('/api/user/avatar', file)
 export const changePasswordApi = (data) => put('/api/user/password', data)
 export const getFavoritesApi = () => get('/api/user/favorites')

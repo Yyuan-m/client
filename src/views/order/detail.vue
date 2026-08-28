@@ -10,11 +10,45 @@
           <el-descriptions-item v-if="order.status === 'completed'" label="评价状态">
             <span class="review-status-text" :class="order.reviewStatus">{{ order.reviewStatusName }}</span>
           </el-descriptions-item>
-          <el-descriptions-item label="车辆">{{ order.carName }}</el-descriptions-item>
-          <el-descriptions-item label="租期">{{ order.startDate }} 至 {{ order.endDate }}（{{ order.days }}天）</el-descriptions-item>
+          <el-descriptions-item label="车辆数">
+            <template v-if="order.items && order.items.length">{{ order.items.length }} 辆</template>
+            <template v-else>1 辆</template>
+          </el-descriptions-item>
           <el-descriptions-item label="取车门店">{{ order.store }}</el-descriptions-item>
           <el-descriptions-item label="下单时间">{{ order.createTime }}</el-descriptions-item>
-          <el-descriptions-item label="日租金">￥{{ order.dailyPrice }}/天</el-descriptions-item>
+        </el-descriptions>
+
+        <!-- 车辆明细（一个订单可含多辆车） -->
+        <div v-if="order.items && order.items.length" class="vehicle-block">
+          <h3 class="block-title">车辆明细</h3>
+          <div v-for="item in order.items" :key="item.id" class="vehicle-card">
+            <img :src="resolveAdminImage(item.carCover)" :alt="item.carName" class="v-img" />
+            <div class="v-info">
+              <h4 class="v-name">{{ item.carName }}</h4>
+              <p class="v-date">{{ item.startDate }} 至 {{ item.endDate }}（{{ item.days }}天）</p>
+              <p class="v-item">
+                日租金 ￥{{ moneyUtil.format(item.dailyPrice) }}/天 · 租金小计 ￥{{ moneyUtil.format(item.rentAmount) }}
+              </p>
+              <p v-if="item.discountAmount > 0" class="v-discount">优惠 -￥{{ moneyUtil.format(item.discountAmount) }}</p>
+              <p class="v-total">小计 ￥{{ moneyUtil.format(item.totalAmount) }}</p>
+            </div>
+          </div>
+        </div>
+        <!-- 兼容历史一车一单：无明细时展示主订单首车 -->
+        <div v-else class="vehicle-block">
+          <div class="vehicle-card">
+            <img :src="resolveAdminImage(order.carCover)" :alt="order.carName" class="v-img" />
+            <div class="v-info">
+              <h4 class="v-name">{{ order.carName }}</h4>
+              <p class="v-date">{{ order.startDate }} 至 {{ order.endDate }}（{{ order.days }}天）</p>
+              <p class="v-item">日租金 ￥{{ moneyUtil.format(order.dailyPrice) }}/天</p>
+              <p class="v-total">小计 ￥{{ moneyUtil.format(order.rentAmount) }}</p>
+            </div>
+          </div>
+        </div>
+
+        <el-descriptions :column="2" border class="amount-block">
+          <el-descriptions-item label="日租金">￥{{ moneyUtil.format(order.dailyPrice) }}/天</el-descriptions-item>
           <el-descriptions-item label="租金合计">￥{{ moneyUtil.format(order.rentAmount) }}</el-descriptions-item>
           <el-descriptions-item v-if="order.couponName" label="使用优惠券">{{ order.couponName }}</el-descriptions-item>
           <el-descriptions-item v-if="order.couponDiscount > 0" label="优惠券抵扣"><span class="discount-text">-￥{{ moneyUtil.format(order.couponDiscount) }}</span></el-descriptions-item>
@@ -58,7 +92,9 @@ import PageSkeleton from '@/components/PageSkeleton/index.vue'
 import EmptyTips from '@/components/EmptyTips/index.vue'
 import ReviewDialog from '@/components/ReviewDialog/index.vue'
 import { getOrderDetailApi, cancelOrderApi, payOrderApi, completeOrderApi } from '@/api/modules/order'
+import { resolveAdminImage } from '@/utils/image'
 import { moneyUtil } from '@/utils'
+import { useUserStore } from '@/stores/user'
 
 const route = useRoute()
 const router = useRouter()
@@ -189,6 +225,12 @@ async function handleComplete() {
     await completeOrderApi(order.value.id)
     ElMessage.success('还车成功，欢迎评价本次服务')
     await loadDetail()
+    // 订单完成会触发后端重算会员等级，刷新用户信息以便升级动画及时感知
+    try {
+      await useUserStore().fetchUserInfo()
+    } catch (e) {
+      console.error('刷新用户信息失败', e)
+    }
   } catch (e) {
     console.error('确认还车失败', e)
   }
@@ -220,6 +262,68 @@ onBeforeUnmount(stopCountdown)
     font-size: $font-size-lg;
     color: $color-danger;
     font-variant-numeric: tabular-nums;
+  }
+}
+
+// 车辆明细区块（一个订单可含多辆车）
+.vehicle-block {
+  margin-top: $space-lg;
+  display: flex;
+  flex-direction: column;
+  gap: $space-base;
+
+  .block-title {
+    font-size: $font-size-lg;
+    font-weight: $font-weight-medium;
+    color: var(--lux-primary-text);
+    margin-bottom: $space-xs;
+  }
+
+  .vehicle-card {
+    display: flex;
+    gap: $space-base;
+    padding: $space-base;
+    border: 1px solid var(--border-color, #e4e4e7);
+    border-radius: 8px;
+    background: var(--card-bg, #fff);
+
+    .v-img {
+      width: 160px;
+      height: 110px;
+      border-radius: 6px;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+
+    .v-info {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .v-name {
+      font-size: $font-size-base;
+      font-weight: $font-weight-medium;
+      color: var(--lux-primary-text);
+      margin-bottom: $space-xs;
+    }
+
+    .v-date,
+    .v-item {
+      font-size: $font-size-sm;
+      color: $color-text-secondary;
+      margin-bottom: 4px;
+    }
+
+    .v-discount {
+      font-size: $font-size-sm;
+      color: $color-success;
+    }
+
+    .v-total {
+      margin-top: 6px;
+      font-weight: $font-weight-medium;
+      color: var(--lux-primary-text);
+    }
   }
 }
 

@@ -6,6 +6,10 @@
       <div v-else class="checkout-content">
         <!-- 订单概览 -->
         <div class="checkout-left">
+          <h3 class="overview-title">
+            已选车辆
+            <span v-if="cartStore.selectedCount > 1" class="overview-count">共 {{ cartStore.selectedCount }} 辆</span>
+          </h3>
           <div v-for="item in cartStore.selectedItems" :key="item.carId" class="order-item">
             <img :src="resolveAdminImage(item.cover)" :alt="item.carName" class="item-img" />
             <div class="item-info">
@@ -131,7 +135,7 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus' // ElMessageBox 用于实名认证拦截
 import { Select, ArrowDown } from '@element-plus/icons-vue'
 import EmptyTips from '@/components/EmptyTips/index.vue'
 import CouponCard from '@/components/CouponCard/index.vue'
@@ -409,6 +413,30 @@ function useCouponNow() {
   ElMessage.success('优惠券使用成功')
 }
 
+// 实名认证拦截：未完成实名与驾驶证认证不允许提交订单
+// 返回 true 表示已认证可继续，false 表示已弹窗拦截
+async function checkVerified() {
+  if (userStore.user?.verifyStatus === 'verified') return true
+  // 本地缓存可能过期，刷新一次用户信息确保认证状态准确
+  try {
+    await userStore.fetchUserInfo()
+  } catch (e) {
+    console.error('刷新用户信息失败', e)
+  }
+  if (userStore.user?.verifyStatus === 'verified') return true
+  try {
+    await ElMessageBox.confirm(
+      '需要完成实名与驾驶证信息认证后才能下单租车，是否现在去认证？',
+      '实名认证提示',
+      { confirmButtonText: '去认证', cancelButtonText: '暂不认证', type: 'warning' }
+    )
+    router.push({ path: '/profile', query: { tab: 'verify' } })
+  } catch {
+    // 用户取消，不做处理
+  }
+  return false
+}
+
 async function submitOrder() {
   if (!formRef.value) return
   try {
@@ -419,6 +447,8 @@ async function submitOrder() {
   if (!cartStore.selectedCount) {
     return
   }
+  // 守卫：未完成实名认证不允许下单
+  if (!(await checkVerified())) return
   // 守卫：价格未加载完成不允许提交，避免前端展示与后端下单价格不一致
   if (cartStore.priceLoading) {
     ElMessage.warning('价格计算中，请稍候')
@@ -440,7 +470,6 @@ async function submitOrder() {
     submitting.value = false
     return
   }
-  ElMessage.success('下单成功')
   // 订单已创建成功，清空购物车失败不应阻塞跳转
   try {
     // 仅清空已选中的商品（已生成订单的）
@@ -448,6 +477,8 @@ async function submitOrder() {
   } catch (e) {
     console.error('清理已下单商品失败', e)
   }
+  // 下单成功（一个订单可含多辆车），跳转订单详情页，由详情页一次性支付该订单全部车辆
+  ElMessage.success('下单成功')
   router.push(`/orders/${res.id}`)
   submitting.value = false
 }
@@ -459,6 +490,22 @@ async function submitOrder() {
   grid-template-columns: 1fr 360px;
   gap: $space-xl;
   @include respond-to('md') { grid-template-columns: 1fr; }
+}
+.overview-title {
+  font-size: $font-size-md;
+  font-weight: $font-weight-medium;
+  margin-bottom: $space-sm;
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  .overview-count {
+    font-size: $font-size-xs;
+    font-weight: $font-weight-regular;
+    color: $color-text-secondary;
+    background: $color-bg-gray;
+    padding: 2px 8px;
+    border-radius: $radius-full;
+  }
 }
 
 .order-item {
