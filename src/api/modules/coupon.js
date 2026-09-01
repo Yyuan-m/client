@@ -18,7 +18,8 @@ export const getMyCouponsApi = (status) => get('/api/coupon/mine', status ? { st
 export const getUsableCouponsApi = (params) => get('/api/coupon/usable', params)
 
 // 领取优惠券，返回领取后的 member_coupon.id
-export const receiveCouponApi = (couponId, source = 'manual') =>
+// source 领取来源：web→官网 / manual→后台发放（后端缺少时默认 manual）
+export const receiveCouponApi = (couponId, source = 'web') =>
   post(`/api/coupon/receive/${couponId}`, { source })
 
 // 锁定优惠券（下单预占，unused → locked）
@@ -44,4 +45,4 @@ export const getClaimedCouponIdsApi = () => get('/api/coupon/claimed-ids')
 // 旧：getCouponListApi({status:'active'}) → 新：getAvailableCouponsApi()
 export const getCouponListApi = (params) => get('/api/coupon/available', params)
 // 旧：claimCouponApi(couponId) → 新：receiveCouponApi(couponId)
-export const claimCouponApi = (couponId) => post(`/api/coupon/receive/${couponId}`, { source: 'manual' })
+export const claimCouponApi = (couponId) => receiveCouponApi(couponId)

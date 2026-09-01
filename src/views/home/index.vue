@@ -568,7 +568,27 @@ async function loadData() {
     reviews.value = results[3] || []
     // 评价渲染后检测哪些内容被截断（用于显示展开按钮）
     nextTick(() => detectClampedReviews())
-    activeCoupons.value = results[4] || []
+    // 按会员等级过滤 level 类型优惠券：仅显示与当前会员等级精确匹配的券
+    let coupons = results[4] || []
+    // 过滤：
+    // - 无 grant_type: 保留（默认 all）
+    // - grant_type=all: 保留
+    // - grant_type=level: 已登录 && 会员等级与目标等级一致 → 保留；否则过滤
+    // - grant_type=user/targeted: 后端已经排除，此处不需要处理
+    if (userStore.user?.level) {
+      const userLevel = userStore.user.level
+      coupons = coupons.filter(c => {
+        if (!c.grantType || c.grantType === 'all') return true
+        if (c.grantType === 'level') {
+          return c.targetLevel === userLevel
+        }
+        return false
+      })
+    } else {
+      // 未登录不展示等级专属券
+      coupons = coupons.filter(c => !c.grantType || c.grantType === 'all')
+    }
+    activeCoupons.value = coupons
     vehicleTypes.value = results[6] || []
     // 第8个结果（登录时为已领取ID列表，未登录时为 undefined）
     if (userStore.isLoggedIn && results[7]) {

@@ -6,15 +6,15 @@
       <div class="cmp-value-area">
         <!-- 库存领完角标：紧凑模式下面额区右上角，一眼可见 -->
         <span v-if="isSoldOut" class="sold-out-corner">已领完</span>
-        <div class="coupon-value" v-if="coupon.type === 'discount'">
+        <div class="coupon-value" v-if="couponType === 'discount'">
           <span class="num">{{ discountText }}</span>
           <span class="unit">折</span>
         </div>
-        <div class="coupon-value" v-else-if="coupon.type === 'deduction' || coupon.type === 'reduction'">
+        <div class="coupon-value" v-else-if="couponType === 'deduction' || couponType === 'reduction'">
           <span class="unit">￥</span>
           <span class="num">{{ deductionText }}</span>
         </div>
-        <div class="coupon-value" v-else-if="coupon.type === 'duration'">
+        <div class="coupon-value" v-else-if="couponType === 'duration'">
           <span class="num">免{{ durationText }}</span>
           <span class="unit">天</span>
         </div>
@@ -71,15 +71,15 @@
       <div class="coupon-left">
         <!-- 库存领完角标：经典模式左侧面额区右上角 -->
         <span v-if="isSoldOut" class="sold-out-corner">已领完</span>
-        <div class="coupon-value" v-if="coupon.type === 'discount'">
+        <div class="coupon-value" v-if="couponType === 'discount'">
           <span class="num">{{ discountText }}</span>
           <span class="unit">折</span>
         </div>
-        <div class="coupon-value" v-else-if="coupon.type === 'deduction' || coupon.type === 'reduction'">
+        <div class="coupon-value" v-else-if="couponType === 'deduction' || couponType === 'reduction'">
           <span class="unit">￥</span>
           <span class="num">{{ deductionText }}</span>
         </div>
-        <div class="coupon-value" v-else-if="coupon.type === 'duration'">
+        <div class="coupon-value" v-else-if="couponType === 'duration'">
           <span class="num">免{{ durationText }}</span>
           <span class="unit">天</span>
         </div>
@@ -157,11 +157,13 @@ defineEmits(['use', 'claim', 'login'])
 // ---------- 显示名称 ----------
 const displayName = computed(() => props.coupon.couponName || props.coupon.name || '优惠券')
 
+// ---------- 券类型（兼容 coupon.type 与我的券的 coupon.couponType） ----------
+const couponType = computed(() => props.coupon.type || props.coupon.couponType || '')
+
 // ---------- 折扣券面额 ----------
 const discountText = computed(() => {
-  // v2: value=0.88 表示 88 折
-  const v = Number(props.coupon.value ?? props.coupon.discountValue ?? 0)
-  // 兼容：v2 用 value(0.88)，旧版用 discountValue(0.8)
+  // v2: value=0.88 表示 88 折；我的券(member_coupon)用 couponValue
+  const v = Number(props.coupon.value ?? props.coupon.discountValue ?? props.coupon.couponValue ?? 0)
   const times10 = (v * 10)
   // 整数显示无小数，非整数保留1位
   return Number.isInteger(times10) ? times10 : times10.toFixed(1)
@@ -169,13 +171,13 @@ const discountText = computed(() => {
 
 // ---------- 满减券面额 ----------
 const deductionText = computed(() => {
-  const v = Number(props.coupon.value ?? props.coupon.discountValue ?? 0)
+  const v = Number(props.coupon.value ?? props.coupon.discountValue ?? props.coupon.couponValue ?? 0)
   return moneyUtil.format(v)
 })
 
 // ---------- 时长券天数 ----------
 const durationText = computed(() => {
-  const v = Number(props.coupon.value ?? 0)
+  const v = Number(props.coupon.value ?? props.coupon.couponValue ?? 0)
   return v || 1
 })
 
