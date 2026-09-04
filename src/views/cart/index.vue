@@ -30,8 +30,24 @@
                 <span v-for="tag in item.tags.slice(0, 3)" :key="tag" class="tag">{{ tag }}</span>
               </div>
               <div class="item-date">
-                <el-icon><Calendar /></el-icon>
-                <span>{{ item.startDate }} 至 {{ item.endDate }}</span>
+                <!-- 点击日期区域弹出日历改期，选完范围立即生效并重算价格 -->
+                <div class="date-edit" title="点击修改租期">
+                  <el-icon><Calendar /></el-icon>
+                  <span class="date-text">{{ item.startDate }} 至 {{ item.endDate }}</span>
+                  <el-icon class="edit-hint"><EditPen /></el-icon>
+                  <el-date-picker
+                    class="date-picker-overlay"
+                    type="daterange"
+                    range-separator="至"
+                    :model-value="[item.startDate, item.endDate]"
+                    :disabled-date="disablePastDate"
+                    :shortcuts="rentShortcuts"
+                    format="YYYY-MM-DD"
+                    value-format="YYYY-MM-DD"
+                    teleported
+                    @change="(val) => handleDateChange(item, val)"
+                  />
+                </div>
                 <span class="days-badge">{{ item.days }}天</span>
                 <span v-if="priceDetailOf(item.carId)?.durationTier" class="tier-badge">{{ priceDetailOf(item.carId).durationTierName }}·{{ discountPercentOf(item.carId) }}</span>
                 <span v-if="priceDetailOf(item.carId)?.holidayDays > 0" class="holiday-badge">含{{ priceDetailOf(item.carId).holidayDays }}天假日/周末</span>
@@ -82,7 +98,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete } from '@element-plus/icons-vue'
 import EmptyTips from '@/components/EmptyTips/index.vue'
 import { useCartStore, useUserStore } from '@/stores'
-import { moneyUtil } from '@/utils'
+import { moneyUtil, dateUtil } from '@/utils'
 import { resolveAdminImage } from '@/utils/image'
 import { useRouter } from 'vue-router'
 
@@ -103,6 +119,45 @@ watch(() => cartStore.selectedIds, () => {
 function priceDetailOf(carId) {
   return cartStore.getPriceDetail(carId)
 }
+
+// ---------- 购物车内改期（选完立即生效并重算价格） ----------
+// 禁用今天之前的日期
+function disablePastDate(date) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return date.getTime() < today.getTime()
+}
+
+// 快捷租期选项：以今天为取车日
+const rentShortcuts = [3, 7, 15, 30].map((d) => ({
+  text: `${d}天`,
+  value: () => {
+    const start = new Date()
+    const end = new Date()
+    end.setDate(start.getDate() + d)
+    return [start, end]
+  }
+}))
+
+async function handleDateChange(item, val) {
+  if (!val || val.length < 2) return
+  const [start, end] = val
+  const r = dateUtil.validateRentDays(start, end, 1, null)
+  if (!r.valid) {
+    ElMessage.warning(r.msg)
+    return
+  }
+  // 日期未变化则不重复提交
+  if (start === item.startDate && end === item.endDate) return
+  try {
+    await cartStore.updateItem(item.carId, start, end, r.days)
+    ElMessage.success(`租期已更新为 ${r.days} 天，价格已刷新`)
+  } catch (e) {
+    console.error('购物车改期失败', e)
+    ElMessage.error('租期更新失败，请重试')
+  }
+}
+
 // 折扣百分比展示（如 weekly 折扣 0.92 → "8.0折"）
 function discountPercentOf(carId) {
   const p = priceDetailOf(carId)
@@ -232,6 +287,48 @@ async function handleRemove(item) {
     color: $color-text-secondary;
     margin-bottom: $space-xs;
     flex-wrap: wrap;
+    // 日期区域：可点击改期，hover 有编辑提示
+    .date-edit {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      padding: 2px 6px;
+      margin-left: -6px;
+      border-bottom: 1px dashed transparent;
+      transition: color $transition-fast, border-color $transition-fast;
+      &:hover {
+        color: var(--lux-primary-text);
+        border-bottom-color: var(--lux-primary-text);
+        .edit-hint { opacity: 1; }
+      }
+      .edit-hint {
+        font-size: $font-size-xs;
+        opacity: 0;
+        transition: opacity $transition-fast;
+      }
+    }
+    // 透明日期选择器覆盖日期区域：点击即可弹日历，选完立即生效
+    :deep(.date-picker-overlay) {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      border: none;
+      cursor: pointer;
+      .el-range-editor {
+        position: absolute;
+        inset: 0;
+        width: 100% !important;
+        height: 100%;
+        opacity: 0;
+        border: none;
+        padding: 0;
+        cursor: pointer;
+      }
+    }
     .days-badge {
       background: $color-bg-gray-dark;
       color: var(--lux-primary-text);

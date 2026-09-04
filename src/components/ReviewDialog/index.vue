@@ -70,7 +70,7 @@
 
           <el-form-item label="评价图片（可选，最多9张）">
             <el-upload
-              :file-list="fileList"
+              v-model:file-list="fileList"
               list-type="picture-card"
               :http-request="customUpload"
               :on-remove="handleFileRemove"
@@ -132,8 +132,10 @@ const form = reactive({
 
 const rateColors = ['#f13a2c', '#f13a2c', '#da291c']
 
-// 图片上传：使用 el-upload file-list，url 存储上传成功后的完整 URL
+// 图片上传：使用 el-upload file-list 展示，url 存储上传成功后的完整 URL
 const fileList = ref([])
+// 已上传成功的图片 URL 列表（提交时以此为准，避免依赖 el-upload 内部列表同步）
+const uploadedUrls = ref([])
 const uploadingCount = ref(0)
 
 // 图片预览（调用全局 ImagePreview 组件）
@@ -191,7 +193,9 @@ async function customUpload(options) {
         }
       }
     })
-    // 响应拦截器对 code=200 已解包，res 即 { url: 'http://...' }
+    // 响应拦截器对 code=200 已解包，res 即 { url: '/uploads/...' }
+    // 记录上传成功的 URL（不依赖 el-upload 列表同步，保证提交时能取到）
+    if (res?.url) uploadedUrls.value.push(res.url)
     onSuccess(res)
   } catch (e) {
     console.error('评价图片上传失败', e)
@@ -204,6 +208,9 @@ async function customUpload(options) {
 
 function handleFileRemove(file, newFileList) {
   fileList.value = newFileList
+  // 同步移除已记录的上传 URL（避免删除的图片仍被提交）
+  const url = file?.response?.url
+  if (url) uploadedUrls.value = uploadedUrls.value.filter(u => u !== url)
 }
 
 // 重置表单状态
@@ -214,6 +221,7 @@ function resetState() {
   form.rating = 5
   form.content = ''
   fileList.value = []
+  uploadedUrls.value = []
   uploadingCount.value = 0
 }
 
@@ -257,8 +265,8 @@ async function handleSubmit() {
     ElMessage.warning('图片正在上传，请稍候')
     return
   }
-  // 收集已上传成功的图片完整 URL
-  const urls = fileList.value.filter(f => f.response?.url).map(f => f.response.url)
+  // 收集已上传成功的图片 URL（以 uploadedUrls 为准，与 el-upload 列表状态解耦）
+  const urls = [...uploadedUrls.value]
   const imagesStr = urls.length ? JSON.stringify(urls) : null
 
   submitting.value = true

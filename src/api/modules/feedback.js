@@ -10,3 +10,6 @@ export const getMyAppointmentsApi = (params, config = {}) =>
 
 // 取消预约（仅待处理/已确认状态可取消）
 export const cancelAppointmentApi = (id) => post(`/api/feedback/appointments/${id}/cancel`)
+
+// 查看联系人完整信息（仅本人可查，未脱敏）
+export const getContactInfoApi = (id) => get(`/api/feedback/appointments/${id}/contact`)

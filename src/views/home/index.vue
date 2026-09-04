@@ -1174,8 +1174,8 @@ onBeforeUnmount(() => {
   margin-top: $space-sm;
 }
 .review-img {
-  width: 64px;
-  height: 64px;
+  width: 72px;
+  height: 72px;
   object-fit: cover;
   border-radius: $radius-none;
   border: 1px solid $color-border;

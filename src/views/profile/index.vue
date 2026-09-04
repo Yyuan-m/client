@@ -46,19 +46,17 @@
             <p class="card-note">* 租车订单为全部订单数 · 累计消费仅统计已完成订单金额</p>
             <p class="card-no">会员编号 NO.{{ memberNo }}</p>
           </div>
-          <el-menu :default-active="activeTab" @select="activeTab = $event">
-            <el-menu-item index="info"><el-icon><User /></el-icon><span>个人信息</span></el-menu-item>
-            <el-menu-item index="orders"><el-icon><List /></el-icon><span>我的订单</span></el-menu-item>
-            <el-menu-item index="appointments"><el-icon><Calendar /></el-icon><span>我的预约</span></el-menu-item>
-            <el-menu-item index="reviews">
-              <el-icon><EditPen /></el-icon>
-              <span>去评价</span>
-              <span v-if="reviewableCount > 0" class="menu-count-badge">{{ reviewableCount }}</span>
-            </el-menu-item>
-            <el-menu-item index="verify"><el-icon><Postcard /></el-icon><span>实名认证</span></el-menu-item>
-            <el-menu-item index="coupons"><el-icon><Ticket /></el-icon><span>我的优惠券</span></el-menu-item>
-            <el-menu-item index="password"><el-icon><Lock /></el-icon><span>修改密码</span></el-menu-item>
-          </el-menu>
+          <el-tabs v-model="activeTab" tab-position="left" class="sidebar-tabs">
+            <el-tab-pane v-for="tab in sidebarTabs" :key="tab.key" :name="tab.key">
+              <template #label>
+                <span class="sidebar-tab-label">
+                  <el-icon :size="16"><component :is="tab.icon" /></el-icon>
+                  <span class="sidebar-tab-text">{{ tab.label }}</span>
+                  <span v-if="tab.key === 'reviews' && reviewableCount > 0" class="menu-count-badge">{{ reviewableCount }}</span>
+                </span>
+              </template>
+            </el-tab-pane>
+          </el-tabs>
         </aside>
 
         <!-- 内容区 -->
@@ -449,25 +447,47 @@
             </template>
           </div>
           
-          <!-- 我的预约 -->
+          <!-- 我的预约/留言 -->
           <div v-else-if="activeTab === 'appointments'" class="tab-panel">
             <h3 class="panel-title">
-              我的预约
+              预约/留言
               <span class="panel-title-count" v-if="appointmentAllTotal > 0">{{ appointmentAllTotal }}</span>
             </h3>
             <p class="panel-desc">
-              提交预约咨询后，客服将尽快与您联系；处理结果（沟通说明、处理人、时间）会同步展示在此
+              提交的预约咨询与留言反馈将统一展示在此，客服处理结果（沟通说明、处理人、时间）会同步于此
             </p>
 
-            <!-- 状态筛选 tabs -->
-            <el-tabs v-model="appointmentStatus" class="appt-tabs" @tab-change="onAppointmentTabChange">
-              <el-tab-pane
-                v-for="tab in appointmentTabs"
-                :key="tab.value"
-                :label="tab.label"
-                :name="tab.value"
-              />
-            </el-tabs>
+            <!-- 筛选工具栏：类型分段 + 状态下拉，单行轻量 -->
+            <div class="appt-filter-bar">
+              <div class="appt-type-segment">
+                <!-- 激活滑块：随选中项左右滑动 -->
+                <span class="segment-slider" :style="{ transform: `translateX(${typeSegmentIndex * 100}%)` }"></span>
+                <button
+                  v-for="tab in appointmentTypeTabs"
+                  :key="tab.value"
+                  type="button"
+                  class="segment-btn"
+                  :class="{ active: appointmentType === tab.value }"
+                  @click="selectAppointmentType(tab.value)"
+                >{{ tab.label }}</button>
+              </div>
+              <div class="appt-status-select">
+                <el-select
+                  v-model="appointmentStatus"
+                  placeholder="全部状态"
+                  size="small"
+                  class="status-el-select"
+                  @change="onAppointmentStatusChange"
+                >
+                  <el-option
+                    v-for="tab in appointmentTabs"
+                    :key="tab.value"
+                    :label="tab.label"
+                    :value="tab.value"
+                  />
+                </el-select>
+              </div>
+            </div>
 
             <div v-if="appointmentLoading" v-loading="true" style="min-height: 200px"></div>
             <template v-else>
@@ -480,33 +500,54 @@
                 >
                   <div class="appt-header">
                     <span class="appt-no">NO.{{ String(appt.id).padStart(6, '0') }}</span>
-                    <span class="appt-status" :class="`st-${appt.status}`">
-                      <i class="status-dot"></i>{{ appt.statusName }}
-                    </span>
+                    <div class="appt-header-right">
+                      <span v-if="appt.type" class="appt-type" :class="`type-${appt.type}`">{{ appt.typeName || (appt.type === 'appointment' ? '预约咨询' : '留言反馈') }}</span>
+                      <span class="appt-status" :class="`st-${appt.status}`">
+                        <i class="status-dot"></i>{{ appt.statusName }}
+                      </span>
+                    </div>
                   </div>
                   <div class="appt-body">
                     <div class="appt-main">
-                      <div class="appt-car-row">
+                      <!-- 车型主行：仅预约咨询有车型/取车日期；留言反馈无此信息 -->
+                      <div v-if="appt.type !== 'feedback'" class="appt-car-row">
                         <span class="appt-car-icon">🚗</span>
                         <span class="appt-car">{{ appt.carType || '车型不限' }}</span>
                         <span v-if="appt.rentDate" class="appt-date-chip">📅 {{ appt.rentDate }} 取车</span>
                       </div>
                       <div class="appt-rows">
-                        <div class="appt-row">
+                        <div class="appt-row appt-contact-row">
                           <span class="appt-label">联系人</span>
-                          <span>{{ appt.name }}（{{ appt.phone }}）</span>
+                          <span class="appt-contact">
+                            <template v-if="contactDetails[appt.id]">
+                              <span class="contact-full contact-text">{{ contactDetails[appt.id].name }}（{{ contactDetails[appt.id].phone }}）</span>
+                            </template>
+                            <template v-else>
+                              <span class="contact-text">{{ appt.name }}（{{ appt.phone }}）</span>
+                            </template>
+                            <span class="appt-contact-toggle" @click="toggleContact(appt)">
+                              <el-icon v-if="contactLoading === appt.id" class="is-loading"><Loading /></el-icon>
+                              <template v-else>{{ contactDetails[appt.id] ? '隐藏详情' : '查看详情' }}</template>
+                            </span>
+                          </span>
                         </div>
                         <div v-if="appt.content" class="appt-row appt-content-row">
                           <span class="appt-label">留言</span>
                           <span
+                            :ref="(el) => setApptContentEl(el, appt.id)"
                             class="appt-content"
-                            :class="{ 'is-clamped': isLongContent(appt) && !expandedAppts.has(appt.id) }"
+                            :class="{ 'is-clamped': !expandedAppts.has(appt.id) }"
                           >{{ appt.content }}</span>
                           <span
-                            v-if="isLongContent(appt)"
+                            v-if="isLongContent(appt) && !expandedAppts.has(appt.id)"
                             class="appt-content-toggle"
                             @click="toggleApptContent(appt.id)"
-                          >{{ expandedAppts.has(appt.id) ? '收起' : '展开' }}</span>
+                          >展开</span>
+                          <span
+                            v-else-if="isLongContent(appt)"
+                            class="appt-content-toggle"
+                            @click="toggleApptContent(appt.id)"
+                          >收起</span>
                         </div>
                       </div>
                       <!-- 处理进度时间线 -->
@@ -514,7 +555,7 @@
                         <div class="tl-item">
                           <i class="tl-dot"></i>
                           <div class="tl-content">
-                            <span class="tl-title">提交预约</span>
+                            <span class="tl-title">{{ appt.type === 'feedback' ? '提交留言' : '提交预约' }}</span>
                             <span class="tl-time">{{ formatTime(appt.createTime) }}</span>
                           </div>
                         </div>
@@ -596,6 +637,46 @@
             </el-form>
           </div>
 
+          <!-- 售后投诉 -->
+          <div v-else-if="activeTab === 'complaint'" class="tab-panel">
+            <h3 class="panel-title">售后投诉</h3>
+            <p class="panel-desc">遇到车况、服务、费用、押金或违章等问题，可提交投诉，我们将在 1-3 个工作日内处理并反馈</p>
+
+            <div class="complaint-entry" @click="router.push('/complaint')">
+              <div class="entry-icon"><el-icon :size="22"><Service /></el-icon></div>
+              <div class="entry-main">
+                <span class="entry-title">提交投诉</span>
+                <span class="entry-desc">填写投诉类型、描述与凭证图片</span>
+              </div>
+              <el-icon class="entry-arrow"><ArrowRight /></el-icon>
+            </div>
+
+            <div class="complaint-recent">
+              <div v-if="complaintLoading" v-loading="true" style="min-height: 120px"></div>
+              <template v-else>
+                <div v-if="complaintList.length" class="complaint-list">
+                  <div
+                    v-for="item in complaintList"
+                    :key="item.id"
+                    class="complaint-item"
+                    @click="router.push(`/complaint/${item.id}`)"
+                  >
+                    <div class="ci-top">
+                      <el-tag size="small" class="ci-type">{{ item.typeName }}</el-tag>
+                      <span class="ci-status" :class="item.status">{{ item.statusName }}</span>
+                    </div>
+                    <p class="ci-desc">{{ item.description }}</p>
+                    <span class="ci-time">{{ formatComplaintTime(item.createdAt) }}</span>
+                  </div>
+                </div>
+                <EmptyTips v-else text="暂无投诉记录" />
+                <div class="view-all-bar">
+                  <el-button type="primary" text @click="router.push('/complaint/list')">查看全部投诉 →</el-button>
+                </div>
+              </template>
+            </div>
+          </div>
+
           <!-- 评价弹窗 -->
           <ReviewDialog
             v-model="reviewDialogVisible"
@@ -609,7 +690,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import EmptyTips from '@/components/EmptyTips/index.vue'
@@ -619,8 +700,9 @@ import { useUserStore } from '@/stores'
 import { updateProfileApi, updateAvatarApi, uploadImageApi, submitVerifyApi, changePasswordApi } from '@/api/modules/user'
 import { getMyCouponsApi } from '@/api/modules/coupon'
 import { getOrderListApi, getReviewableOrdersApi } from '@/api/modules/order'
-import { getMyAppointmentsApi, cancelAppointmentApi } from '@/api/modules/feedback'
-import { moneyUtil, validators } from '@/utils'
+import { getMyAppointmentsApi, cancelAppointmentApi, getContactInfoApi } from '@/api/modules/feedback'
+import { getMyComplaintsApi } from '@/api/modules/complaint'
+import { moneyUtil, validators, dateUtil } from '@/utils'
 import { resolveAdminImage, resolveClientImage } from '@/utils/image'
 import { LEVEL_RULES, getLevelRule, getNextLevelInfo } from '@/utils/memberLevel'
 import { ElMessageBox } from 'element-plus'
@@ -631,6 +713,19 @@ const userStore = useUserStore()
 // 支持 /profile?tab=verify 直接定位到指定面板（如认证拦截跳转）
 const TAB_KEYS = ['info', 'orders', 'appointments', 'reviews', 'verify', 'coupons', 'password']
 const activeTab = ref(TAB_KEYS.includes(route.query.tab) ? route.query.tab : 'info')
+
+// 侧边导航数据源：图标为全局注册的 Element Plus 图标名（main.js 全量注册）
+// 用 el-tabs(left) 官方组件驱动，激活指示条自带滑动过渡动画
+const sidebarTabs = [
+  { key: 'info', label: '个人信息', icon: 'User' },
+  { key: 'orders', label: '我的订单', icon: 'List' },
+  { key: 'appointments', label: '预约/留言', icon: 'Calendar' },
+  { key: 'reviews', label: '去评价', icon: 'EditPen' },
+  { key: 'verify', label: '实名认证', icon: 'Postcard' },
+  { key: 'coupons', label: '我的优惠券', icon: 'Ticket' },
+  { key: 'password', label: '修改密码', icon: 'Lock' },
+  { key: 'complaint', label: '售后投诉', icon: 'Service' }
+]
 
 // ============ 会员等级主题（user-card 按等级区分样式）============
 // 等级规则/颜色统一维护在 utils/memberLevel.js（五档含黑卡，扩展只需在表内插行）
@@ -966,7 +1061,7 @@ function goUseCoupon() {
   router.push('/vehicles')
 }
 
-// ============ 我的预约 ============
+// ============ 我的预约/留言 ============
 // 状态机（与后台管理系统对齐）：pending 待处理 / handled 已处理 / cancelled 已取消
 const appointmentTabs = [
   { value: 'all', label: '全部' },
@@ -974,21 +1069,71 @@ const appointmentTabs = [
   { value: 'handled', label: '已处理' },
   { value: 'cancelled', label: '已取消' }
 ]
+// 类型筛选（预约咨询 / 留言反馈 存同一张反馈表，用 type 区分）
+const appointmentTypeTabs = [
+  { value: 'all', label: '全部类型' },
+  { value: 'appointment', label: '预约咨询' },
+  { value: 'feedback', label: '留言反馈' }
+]
+const appointmentType = ref('all')
+// 当前选中类型在分段中的下标（用于滑块定位，随选中项滑动过渡）
+const typeSegmentIndex = computed(() => {
+  const i = appointmentTypeTabs.findIndex((t) => t.value === appointmentType.value)
+  return i < 0 ? 0 : i
+})
 const appointmentStatus = ref('all')
 const appointments = ref([])
 const appointmentTotal = ref(0)
-// 全部预约总数（不随状态筛选变化，用于标题计数）
+// 全部记录总数（不随筛选变化，用于标题计数）
 const appointmentAllTotal = ref(0)
 const appointmentPage = ref(1)
 const appointmentPageSize = 10
 const appointmentLoading = ref(false)
 const cancellingId = ref(null)
+// 联系人详情状态：key 为 appt.id，value 为 { name, phone } 或 null
+const contactDetails = ref({})
+const contactLoading = ref(null) // 正在加载的 id
 
-// 留言超长折叠：超过阈值时收起为 2 行，点击"展开/收起"切换
-const APPT_CONTENT_CLAMP_LEN = 60
+async function toggleContact(appt) {
+  if (contactDetails.value[appt.id]) {
+    // 已加载则直接切换显隐
+    const next = { ...contactDetails.value }
+    delete next[appt.id]
+    contactDetails.value = next
+    return
+  }
+  contactLoading.value = appt.id
+  try {
+    const res = await getContactInfoApi(appt.id)
+    contactDetails.value = { ...contactDetails.value, [appt.id]: res }
+  } catch (e) {
+    console.error('获取联系人详情失败', e)
+  } finally {
+    contactLoading.value = null
+  }
+}
+
+// 留言超长折叠：渲染后按实际行数检测（超过 2 行才收起并显示"展开/收起"按钮）
 const expandedAppts = ref(new Set())
+// 真实溢出的记录 id 集（content 渲染后 scrollHeight > clientHeight 判断）
+const longContentIds = ref(new Set())
+// 收集每条留言内容 DOM，用于测量是否溢出
+const apptContentEls = new Map()
+function setApptContentEl(el, id) {
+  if (el) apptContentEls.set(id, el)
+  else apptContentEls.delete(id)
+}
 function isLongContent(appt) {
-  return (appt.content?.length || 0) > APPT_CONTENT_CLAMP_LEN
+  return longContentIds.value.has(appt.id)
+}
+function measureApptContent() {
+  nextTick(() => {
+    const next = new Set()
+    apptContentEls.forEach((el, id) => {
+      if (el && el.scrollHeight > el.clientHeight + 1) next.add(id)
+    })
+    longContentIds.value = next
+  })
 }
 function toggleApptContent(id) {
   const next = new Set(expandedAppts.value)
@@ -1002,12 +1147,15 @@ function toggleApptContent(id) {
 
 const emptyAppointmentText = computed(() => {
   const map = {
-    all: '暂无预约记录',
-    pending: '暂无待处理的预约',
-    handled: '暂无已处理的预约',
-    cancelled: '暂无已取消的预约'
+    all: '暂无记录',
+    pending: '暂无待处理的记录',
+    handled: '暂无已处理的记录',
+    cancelled: '暂无已取消的记录'
   }
-  return map[appointmentStatus.value] || '暂无预约记录'
+  const base = map[appointmentStatus.value] || '暂无记录'
+  return appointmentType.value === 'appointment' ? base.replace('记录', '预约')
+    : appointmentType.value === 'feedback' ? base.replace('记录', '留言')
+    : base
 })
 
 async function loadAppointments() {
@@ -1015,7 +1163,8 @@ async function loadAppointments() {
   try {
     const params = { page: appointmentPage.value, pageSize: appointmentPageSize }
     if (appointmentStatus.value !== 'all') params.status = appointmentStatus.value
-    // 列表请求与"全部总数"请求并行；总数不带 status，保证标题计数始终为全部预约数量
+    if (appointmentType.value !== 'all') params.type = appointmentType.value
+    // 列表请求与"全部总数"请求并行；总数不带筛选，保证标题计数始终为所有记录总数
     const [res, allRes] = await Promise.all([
       getMyAppointmentsApi(params),
       getMyAppointmentsApi({ page: 1, pageSize: 1 })
@@ -1023,8 +1172,10 @@ async function loadAppointments() {
     appointments.value = res.list || []
     appointmentTotal.value = res.total || 0
     appointmentAllTotal.value = allRes.total || 0
+    // 数据渲染后再按实际行数测量留言是否溢出（超过 2 行才展示展开按钮）
+    measureApptContent()
   } catch (e) {
-    console.error('预约记录加载失败', e)
+    console.error('记录加载失败', e)
     appointments.value = []
     appointmentTotal.value = 0
     appointmentAllTotal.value = 0
@@ -1033,8 +1184,38 @@ async function loadAppointments() {
   }
 }
 
-// el-tabs 切换：v-model 已更新为最新状态，仅需重置页码并重新加载
-function onAppointmentTabChange() {
+// 售后投诉：最近记录（最多5条）+ 提交入口
+const complaintList = ref([])
+const complaintLoading = ref(false)
+
+function formatComplaintTime(t) {
+  if (!t) return ''
+  return dateUtil.format(t, 'YYYY-MM-DD HH:mm')
+}
+
+async function loadComplaints() {
+  complaintLoading.value = true
+  try {
+    const res = await getMyComplaintsApi({ page: 1, pageSize: 5 }, { noDedup: true })
+    complaintList.value = res.list || []
+  } catch (e) {
+    console.error('我的投诉加载失败', e)
+    complaintList.value = []
+  } finally {
+    complaintLoading.value = false
+  }
+}
+
+// 分段选择类型：重置页码并加载
+function selectAppointmentType(type) {
+  if (appointmentType.value === type) return
+  appointmentType.value = type
+  appointmentPage.value = 1
+  loadAppointments()
+}
+
+// 状态下拉切换：v-model 已更新为最新状态，仅需重置页码并重新加载
+function onAppointmentStatusChange() {
   appointmentPage.value = 1
   loadAppointments()
 }
@@ -1128,6 +1309,10 @@ watch(activeTab, async (tab) => {
   }
   if (tab === 'coupons' && !coupons.value.length) {
     await loadCoupons(couponStatus.value)
+  }
+  if (tab === 'complaint') {
+    // 每次进入都拉最新（后台可能已处理投诉）
+    await loadComplaints()
   }
 })
 
@@ -1355,21 +1540,64 @@ onMounted(() => {
     max-height: none;
     overflow: visible;
   }
-  :deep(.el-menu) {
-    background: transparent;
-    border-right: none;
-  }
-  :deep(.el-menu-item) {
-    color: $color-text-secondary;
-    &:hover {
-      color: var(--lux-primary-text);
-      background: transparent;
+  // 侧边导航（官方 el-tabs 垂直布局）：保留上次改造的配色节奏，
+  // 指示条改为官方 active-bar（品牌色 2px 竖条，切换时沿菜单滑动）
+  :deep(.sidebar-tabs) {
+    // 右侧内容区由页面自身的 v-if 面板渲染，隐藏 tabs 空内容容器
+    .el-tabs__content {
+      display: none;
     }
-    &.is-active {
-      color: var(--lux-primary-text);
-      background: transparent;
+    .el-tabs__header.is-left {
+      margin: 0;
+      border-right: none;
+    }
+    .el-tabs__nav-wrap.is-left {
+      margin-right: 0;
+      // 去掉官方右侧 2px 分割线，侧栏本身无卡片背景，保留分割线会显脏
+      &::after {
+        content: none;
+      }
+    }
+    // 指示条：官方默认在右侧（贴着内容区），移到左边缘与面板左饰线呼应
+    .el-tabs__active-bar.is-left {
+      left: 0;
+      right: auto;
+      width: 2px;
+      background: var(--lux-primary-text);
+      // 与官方一致的缓动曲线，仅略微收紧时长，切换更跟手
+      transition-duration: 0.3s;
+    }
+    .el-tabs__item.is-left {
+      justify-content: flex-start;
+      height: 44px;
+      padding: 0 $space-xs;
+      font-size: $font-size-base;
+      font-weight: 400;
+      color: $color-text-secondary;
+      &:hover {
+        color: var(--lux-primary-text);
+      }
+      &.is-active {
+        color: var(--lux-primary-text);
+        font-weight: $font-weight-medium;
+      }
+      .sidebar-tab-label {
+        display: inline-flex;
+        align-items: center;
+        gap: $space-xxs;
+        min-width: 0;
+      }
+      .sidebar-tab-text {
+        @include ellipsis;
+      }
     }
   }
+}
+
+// 面板通用基线：与侧边栏卡片统一上下边距，保证 Tab 切换时标题位置稳定
+.tab-panel {
+  min-height: 320px;
+  padding-top: $space-xxs;
 }
 
 .panel-title {
@@ -1378,6 +1606,7 @@ onMounted(() => {
   gap: $space-xxs;
   font-size: $font-size-lg;
   font-weight: $font-weight-medium;
+  line-height: $line-height-tight;
   margin-bottom: $space-base;
   color: $color-text;
 }
@@ -1385,9 +1614,9 @@ onMounted(() => {
 .panel-desc {
   font-size: $font-size-sm;
   color: $color-text-secondary;
-  line-height: 1.6;
-  margin-bottom: $space-lg;
-  padding: $space-sm $space-base;
+  line-height: $line-height-base;
+  margin-bottom: $space-md;
+  padding: $space-xs $space-base;
   background: $color-bg-gray;
   border-left: 2px solid var(--lux-primary-text);
 }
@@ -1399,8 +1628,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: $space-lg;
-  padding: $space-base 0 $space-xl;
-  margin-bottom: $space-base;
+  padding: $space-base 0 $space-md;
+  margin-bottom: $space-md;
   border-bottom: 1px solid var(--lux-border);
 }
 .avatar-uploader {
@@ -1453,13 +1682,18 @@ onMounted(() => {
 // ---------- 我的订单（最近 3 单） ----------
 .order-list { display: flex; flex-direction: column; gap: $space-base; }
 .order-card {
+  position: relative;
   background: $color-bg-gray;
   border: 1px solid $color-border;
+  border-left: 2px solid $color-border;
   border-radius: $radius-none;
   padding: $space-base $space-md;
   cursor: pointer;
-  transition: transform $transition-base;
-  &:hover { transform: translateY(-2px); }
+  transition: border-color $transition-base, transform $transition-base;
+  &:hover {
+    transform: translateY(-2px);
+    border-left-color: var(--lux-primary-text);
+  }
 }
 .order-header {
   display: flex;
@@ -1487,10 +1721,10 @@ onMounted(() => {
   }
 }
 
-// 侧边栏菜单项右侧计数胶囊（行内元素，垂直居中）
+// 侧边栏菜单项计数胶囊（位于 label 行内，与文字保持固定间距）
 .menu-count-badge {
-  margin-left: auto;
-  align-self: center;
+  margin-left: $space-xxs;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1524,24 +1758,149 @@ onMounted(() => {
   display: flex;
   gap: $space-base;
   align-items: center;
-  .order-img { width: 100px; height: 70px; border-radius: $radius-none; object-fit: cover; }
+  .order-img {
+    width: 100px;
+    height: 70px;
+    border-radius: $radius-none;
+    object-fit: cover;
+    flex-shrink: 0;
+    background: $color-bg-gray-dark;
+  }
   .order-info {
     flex: 1;
-    h4 { font-size: $font-size-base; font-weight: $font-weight-medium; margin-bottom: $space-xs; }
+    min-width: 0;
+    h4 {
+      font-size: $font-size-base;
+      font-weight: $font-weight-medium;
+      margin-bottom: $space-xs;
+      @include ellipsis;
+    }
     p { font-size: $font-size-sm; color: $color-text-secondary; }
-    .order-store { font-size: $font-size-xs; color: $color-text-tertiary; }
+    .order-store {
+      font-size: $font-size-xs;
+      color: $color-text-tertiary;
+      margin-top: $space-xxs;
+      @include ellipsis;
+    }
   }
   .order-amount {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
-    .amount { font-size: $font-size-lg; font-weight: $font-weight-medium; color: var(--lux-primary-text); }
+    flex-shrink: 0;
+    .amount {
+      font-size: $font-size-lg;
+      font-weight: $font-weight-medium;
+      color: var(--lux-primary-text);
+      white-space: nowrap;
+    }
   }
 }
 .view-all-bar {
   display: flex;
   justify-content: center;
-  margin-top: $space-lg;
+  margin-top: $space-md;
+  padding-top: $space-sm;
+  border-top: 1px solid $color-divider;
+}
+
+// ---------- 售后投诉 ----------
+.complaint-entry {
+  display: flex;
+  align-items: center;
+  gap: $space-base;
+  padding: $space-base $space-md;
+  margin-bottom: $space-lg;
+  background: linear-gradient(135deg, rgba(217, 41, 28, 0.08), rgba(217, 41, 28, 0.03));
+  border: 1px solid rgba(217, 41, 28, 0.2);
+  border-radius: $radius-lg;
+  cursor: pointer;
+  transition: transform $transition-fast, box-shadow $transition-fast;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  }
+
+  .entry-icon {
+    width: 44px;
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: $radius-md;
+    color: #fff;
+    background: var(--lux-primary-text);
+  }
+
+  .entry-main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+
+    .entry-title {
+      font-size: $font-size-base;
+      font-weight: $font-weight-medium;
+      color: $color-text;
+    }
+    .entry-desc {
+      font-size: $font-size-xs;
+      color: $color-text-secondary;
+    }
+  }
+
+  .entry-arrow {
+    color: $color-text-tertiary;
+  }
+}
+
+.complaint-list {
+  .complaint-item {
+    padding: $space-base;
+    margin-bottom: $space-sm;
+    border: 1px solid $color-divider;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: border-color $transition-fast;
+
+    &:hover {
+      border-color: var(--lux-primary-text);
+    }
+
+    .ci-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: $space-xs;
+
+      .ci-status {
+        font-size: $font-size-xs;
+        padding: 1px 8px;
+        border-radius: 999px;
+        &.pending { color: #f59e0b; background: rgba(245, 158, 11, 0.12); }
+        &.processing { color: #3b82f6; background: rgba(59, 130, 246, 0.12); }
+        &.resolved { color: #10b981; background: rgba(16, 185, 129, 0.12); }
+        &.rejected { color: #ef4444; background: rgba(239, 68, 68, 0.12); }
+      }
+    }
+
+    .ci-desc {
+      font-size: $font-size-sm;
+      color: $color-text;
+      line-height: 1.6;
+      margin-bottom: $space-xs;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .ci-time {
+      font-size: $font-size-xs;
+      color: $color-text-tertiary;
+    }
+  }
 }
 
 // ---------- 实名认证 / 驾驶证 ----------
@@ -1739,7 +2098,7 @@ onMounted(() => {
 .coupon-tabs {
   display: flex;
   gap: $space-xs;
-  margin-bottom: $space-lg;
+  margin-bottom: $space-md;
   border-bottom: 1px solid $color-divider;
   flex-wrap: wrap;
 }
@@ -1783,34 +2142,78 @@ onMounted(() => {
   }
 }
 
-// ---------- 我的预约 ----------
-.appt-list { display: flex; flex-direction: column; gap: 12px; }
+// ---------- 我的预约/留言 ----------
+.appt-list { display: flex; flex-direction: column; gap: $space-base; }
 
-// 我的预约状态筛选 el-tabs：紧凑化，贴合面板内容区
-.appt-tabs {
-  margin-bottom: 0;
-  :deep(.el-tabs__header) {
-    margin: 0 0 $space-base;
+// 筛选工具栏：类型分段（轻量胶囊）+ 状态下拉，单行紧凑
+.appt-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: $space-sm;
+  margin-bottom: $space-base;
+
+  .appt-type-segment {
+    display: inline-flex;
+    position: relative;
+    padding: 3px;
+    background: $color-bg-gray;
+    border: 1px solid $color-border;
+    border-radius: $radius-full;
+
+    // 激活滑块：绝对定位，紧随选中项左右滑动
+    .segment-slider {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      bottom: 3px;
+      width: calc((100% - 6px) / 3);
+      background: $color-bg-gray-dark;
+      border-radius: $radius-full;
+      transition: transform $transition-fast;
+      pointer-events: none;
+    }
+
+    .segment-btn {
+      position: relative;
+      z-index: 1;
+      border: none;
+      background: transparent;
+      padding: 4px $space-sm;
+      font-size: $font-size-sm;
+      color: $color-text-secondary;
+      border-radius: $radius-full;
+      cursor: pointer;
+      transition: color $transition-fast;
+      white-space: nowrap;
+
+      &:hover { color: $color-text; }
+      &.active {
+        color: var(--lux-primary-text);
+        font-weight: $font-weight-medium;
+      }
+    }
   }
-  :deep(.el-tabs__item) {
-    // padding: 0 $space-md;
-    height: 40px;
-    line-height: 40px;
-    font-size: $font-size-sm;
+
+  .appt-status-select {
+    flex-shrink: 0;
+    margin-left: auto;
+    width: 120px;
+    .status-el-select {
+      width: 100%;
+    }
   }
 }
 .appt-card {
   position: relative;
   background: $color-bg-gray;
   border: 1px solid $color-border;
-  border-left: 4px solid $color-text-tertiary;
-  border-radius: 10px;
-  padding: 12px 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
-  transition: box-shadow $transition-base, transform $transition-base;
+  border-left: 2px solid $color-text-tertiary;
+  border-radius: $radius-none;
+  padding: $space-base $space-md;
+  transition: border-color $transition-base, transform $transition-base;
   &:hover {
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
     transform: translateY(-1px);
+    border-left-color: var(--lux-primary-text);
   }
   // 状态色条
   &.appt-pending { border-left-color: $color-warning; }
@@ -1821,9 +2224,9 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding-bottom: 10px;
+  padding-bottom: $space-xxs;
   border-bottom: 1px solid $color-divider;
-  margin-bottom: 12px;
+  margin-bottom: $space-xs;
   .appt-no {
     font-size: $font-size-xs;
     color: $color-text-tertiary;
@@ -1833,10 +2236,10 @@ onMounted(() => {
   .appt-status {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
+    gap: $space-xxs;
     font-size: $font-size-xs;
     font-weight: $font-weight-medium;
-    padding: 3px 12px;
+    padding: 3px $space-xs;
     border-radius: $radius-full;
     .status-dot {
       width: 6px;
@@ -1855,9 +2258,27 @@ html.light .appt-status {
   &.st-pending { color: #b45309; }
   &.st-handled { color: #15803d; }
 }
+// 类型徽标：预约咨询 / 留言反馈（深底浅字，暗色为默认主题；亮色由 html.light 覆盖）
+.appt-header-right {
+  display: inline-flex;
+  align-items: center;
+  gap: $space-xxs;
+}
+.appt-type {
+  display: inline-flex;
+  align-items: center;
+  font-size: $font-size-xs;
+  font-weight: $font-weight-medium;
+  padding: 3px $space-xs;
+  border-radius: $radius-full;
+  &.type-appointment { color: #7ab5ff; background: rgba(64, 158, 255, 0.14); }
+  &.type-feedback { color: #e8a33d; background: rgba(230, 162, 60, 0.14); }
+  html.light &.type-appointment { color: #1e50a2; }
+  html.light &.type-feedback { color: #b45309; }
+}
 .appt-body {
   display: flex;
-  gap: 12px;
+  gap: $space-xs;
   align-items: flex-start;
 }
 .appt-main { flex: 1; min-width: 0; }
@@ -1865,10 +2286,10 @@ html.light .appt-status {
 .appt-car-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: $space-xxs;
   flex-wrap: wrap;
-  margin-bottom: 10px;
-  .appt-car-icon { font-size: 16px; }
+  margin-bottom: $space-xxs;
+  .appt-car-icon { font-size: $font-size-md; }
   .appt-car {
     font-size: $font-size-md;
     font-weight: $font-weight-semibold;
@@ -1880,7 +2301,7 @@ html.light .appt-status {
     font-size: $font-size-xs;
     color: #7ab5ff;
     background: rgba(64, 158, 255, 0.1);
-    padding: 2px 10px;
+    padding: 2px $space-xxs;
     border-radius: $radius-full;
   }
 }
@@ -1889,8 +2310,8 @@ html.light .appt-date-chip { color: #1e50a2; }
 .appt-rows {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 10px;
+  gap: $space-xxxs;
+  margin-bottom: $space-xxs;
 }
 .appt-row {
   display: flex;
@@ -1904,6 +2325,38 @@ html.light .appt-date-chip { color: #1e50a2; }
   }
   span:last-child { word-break: break-all; }
 }
+// 联系人行：默认脱敏显示，可"查看详情"展开完整姓名/手机号
+.appt-contact-row { align-items: center; }
+.appt-contact {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: $space-xxs;
+  .contact-full {
+    color: $color-text;
+    font-weight: $font-weight-medium;
+  }
+  // 联系人为纯文本时让其可收缩，过长省略
+  .contact-text {
+    @include ellipsis;
+    flex: 1;
+    min-width: 0;
+  }
+}
+.appt-contact-toggle {
+  flex-shrink: 0;
+  font-size: $font-size-xs;
+  color: var(--lux-primary-text);
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  white-space: nowrap;
+  &:hover { opacity: 0.8; }
+}
+
 // 留言行：内容超长折叠为 2 行，可展开/收起
 .appt-content-row { align-items: flex-start; }
 .appt-content {
@@ -1932,9 +2385,9 @@ html.light .appt-date-chip { color: #1e50a2; }
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 10px 0 10px 4px;
-  margin-bottom: 8px;
+  gap: $space-xxs;
+  padding: $space-xxs 0 $space-xxs 4px;
+  margin-bottom: $space-xxs;
   // 竖向连接线
   &::before {
     content: '';
@@ -1950,7 +2403,7 @@ html.light .appt-date-chip { color: #1e50a2; }
   position: relative;
   display: flex;
   align-items: flex-start;
-  gap: 12px;
+  gap: $space-xs;
 }
 .tl-dot {
   position: relative;
@@ -1990,7 +2443,7 @@ html.light .appt-date-chip { color: #1e50a2; }
       // 暗色默认提亮；亮色用主题 info 色
       color: #7cc0de;
       background: rgba(76, 152, 185, 0.12);
-      padding: 1px 8px;
+      padding: 1px $space-xxs;
       border-radius: $radius-full;
       html.light & { color: $color-info; }
     }
@@ -2005,13 +2458,14 @@ html.light .appt-date-chip { color: #1e50a2; }
 .appt-remark {
   display: flex;
   align-items: flex-start;
-  gap: 8px;
-  margin-top: 10px;
-  padding: 10px 12px;
+  gap: $space-xxs;
+  margin-top: $space-xxs;
+  padding: $space-xxs $space-xs;
   background: rgba(103, 194, 58, 0.06);
   border: 1px solid rgba(103, 194, 58, 0.25);
-  border-radius: 8px;
-  .remark-icon { font-size: 14px; line-height: 1.4; }
+  border-left: 2px solid $color-success;
+  border-radius: $radius-none;
+  .remark-icon { font-size: $font-size-base; line-height: 1.4; }
   .remark-text {
     font-size: $font-size-sm;
     color: $color-text-secondary;
@@ -2022,18 +2476,19 @@ html.light .appt-date-chip { color: #1e50a2; }
 .appt-cancelled .appt-remark {
   background: $color-bg-gray;
   border-color: $color-divider;
+  border-left-color: $color-text-tertiary;
 }
 .appt-actions {
   flex-shrink: 0;
   align-self: center;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: $space-xxs;
 }
 .appt-pager {
   display: flex;
   justify-content: center;
-  margin-top: 24px;
+  margin-top: $space-md;
 }
 .pwd-form { max-width: 480px; }
 </style>

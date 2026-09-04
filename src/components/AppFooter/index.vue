@@ -24,6 +24,7 @@
           <ul>
             <li><router-link to="/about">品牌介绍</router-link></li>
             <li><router-link to="/contact">联系客服</router-link></li>
+            <li><router-link to="/complaint">售后投诉</router-link></li>
             <li><router-link to="/vehicles">车型列表</router-link></li>
           </ul>
         </div>

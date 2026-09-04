@@ -36,7 +36,10 @@ const routes = [
       { path: 'checkout', name: 'Checkout', component: () => import('@/views/order/checkout.vue'), meta: { title: '确认下单', requiresAuth: true } },
       { path: 'profile', name: 'Profile', component: () => import('@/views/profile/index.vue'), meta: { title: '个人中心', requiresAuth: true } },
       { path: 'orders', name: 'OrderList', component: () => import('@/views/order/list.vue'), meta: { title: '我的订单', requiresAuth: true } },
-      { path: 'orders/:id', name: 'OrderDetail', component: () => import('@/views/order/detail.vue'), meta: { title: '订单详情', requiresAuth: true } }
+      { path: 'orders/:id', name: 'OrderDetail', component: () => import('@/views/order/detail.vue'), meta: { title: '订单详情', requiresAuth: true } },
+      { path: 'complaint', name: 'Complaint', component: () => import('@/views/complaint/index.vue'), meta: { title: '售后投诉', requiresAuth: true } },
+      { path: 'complaint/list', name: 'ComplaintList', component: () => import('@/views/complaint/list.vue'), meta: { title: '我的投诉', requiresAuth: true } },
+      { path: 'complaint/:id', name: 'ComplaintDetail', component: () => import('@/views/complaint/detail.vue'), meta: { title: '投诉详情', requiresAuth: true } }
     ]
   },
 

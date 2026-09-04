@@ -68,6 +68,10 @@
             type="primary"
             @click="openReviewDialog"
           >{{ order.reviewStatus === 'unreviewed' ? '去评价' : '去追评' }}</el-button>
+          <el-button
+            v-if="order.status === 'renting' || order.status === 'completed'"
+            @click="router.push({ path: '/complaint', query: { orderNo: order.orderNo } })"
+          >投诉</el-button>
           <el-button v-if="order.status === 'pending'" type="danger" @click="handleCancel">取消订单</el-button>
         </div>
       </template>
