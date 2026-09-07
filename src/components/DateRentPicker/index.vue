@@ -31,7 +31,9 @@ const props = defineProps({
   // 最大租期天数；null 表示不限（车辆级 maxRentDays 为空时不限制）
   maxDays: { type: Number, default: null },
   // 最早可租日期（YYYY-MM-DD 字符串或 Date）：用于已出租/已预约车辆，禁用该日期之前的所有日期
-  minDate: { type: [String, Date], default: null }
+  minDate: { type: [String, Date], default: null },
+  // 额外禁用规则（Date → boolean）：与内部规则叠加，用于禁用已租出/整备期等中段日期
+  disabledDateFn: { type: Function, default: null }
 })
 
 const emit = defineEmits(['update:modelValue', 'change'])
@@ -72,7 +74,7 @@ function parseMinDate() {
   return d
 }
 
-// 禁用今天之前的日期 + minDate 之前的日期（已出租车辆的最早起租日限制）
+// 禁用今天之前的日期 + minDate 之前的日期（已出租车辆的最早起租日限制）+ 外部额外规则（如已租出区间）
 const disabledDate = (date) => {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
@@ -81,6 +83,8 @@ const disabledDate = (date) => {
   // 禁用最早可租日期之前的日期
   const min = parseMinDate()
   if (min && date.getTime() < min.getTime()) return true
+  // 外部额外禁用规则（已租出/整备期等中段日期）
+  if (props.disabledDateFn && props.disabledDateFn(date)) return true
   return false
 }
 

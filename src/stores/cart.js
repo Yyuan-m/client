@@ -127,6 +127,27 @@ export const useCartStore = defineStore(
       }
     }
 
+    // ---------- 跨端实时同步检测 ----------
+    // 拉取远程购物车列表与本地图做摘要比对（覆盖另一端增删/改期/清空），
+    // 不一致时调用 initCart 全量同步（保留本地选中状态）。一致则无任何写操作，开销极小。
+    // 由购物车页轮询 + 页面重新可见时调用，实现 web / 移动端互相实时刷新。
+    async function checkRemoteSync() {
+      if (!auth.isLoggedIn()) return
+      try {
+        const list = await getCartListApi()
+        const remoteItems = (list || []).map(mapFromApi)
+        const sig = (arr) => arr
+          .map((i) => `${i.carId}|${i.carName}|${i.dailyPrice}|${i.startDate}|${i.endDate}|${i.days}`)
+          .sort()
+          .join(';')
+        if (sig(remoteItems) !== sig(items.value)) {
+          await initCart()
+        }
+      } catch (e) {
+        // 静默：网络抖动等下轮轮询重试即可
+      }
+    }
+
     // ---------- 加入购物车 ----------
     async function addItem(car, startDate, endDate, days) {
       if (!auth.isLoggedIn()) {
@@ -171,6 +192,7 @@ export const useCartStore = defineStore(
     async function updateItem(carId, startDate, endDate, days) {
       const item = items.value.find((i) => i.carId === carId)
       if (item) {
+        const prev = { startDate: item.startDate, endDate: item.endDate, days: item.days }
         item.startDate = startDate
         item.endDate = endDate
         item.days = days
@@ -178,7 +200,12 @@ export const useCartStore = defineStore(
           try {
             await updateCartApi(item.id, { startDate, endDate, days })
           } catch (e) {
+            // 失败回滚本地日期（错误提示由 request.js 统一弹出）
             console.error('更新购物车失败', e)
+            item.startDate = prev.startDate
+            item.endDate = prev.endDate
+            item.days = prev.days
+            throw e
           }
         }
         // 租期变化后必须重新计算价格
@@ -254,6 +281,7 @@ export const useCartStore = defineStore(
       totalAmount,
       grandTotal,
       initCart,
+      checkRemoteSync,
       addItem,
       removeItem,
       updateItem,
@@ -268,9 +296,12 @@ export const useCartStore = defineStore(
     }
   },
   {
+    // 持久化购物车基础数据；价格明细/加载态不持久化，
+    // 避免接口异常时展示过期价格、掩盖后端不可达的问题（价格必须每次实时计算）
     persist: {
       key: 'lux_customer_cart',
-      storage: localStorage
+      storage: localStorage,
+      paths: ['items', 'selectedIds']
     }
   }
 )
