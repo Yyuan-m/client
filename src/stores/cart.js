@@ -117,9 +117,9 @@ export const useCartStore = defineStore(
         const backendCarIds = backendItems.map((i) => i.carId)
         const localOnly = items.value.filter((i) => !backendCarIds.includes(i.carId))
         items.value = [...backendItems, ...localOnly]
-        // 新加载的商品默认全选
-        const newIds = backendItems.map((i) => i.carId).filter((id) => !selectedIds.value.includes(id))
-        selectedIds.value = [...selectedIds.value.filter((id) => backendCarIds.includes(id) || localOnly.some((i) => i.carId === id)), ...newIds]
+        // 不自动全选：仅保留用户已手动选中且仍存在的项（新增/不同端加入的商品需用户手动勾选）
+        const allCarIds = new Set([...backendCarIds, ...localOnly.map((i) => i.carId)])
+        selectedIds.value = selectedIds.value.filter((id) => allCarIds.has(id))
         // 初始化后立即拉取一次价格
         await refreshPrices()
       } catch (e) {
@@ -158,10 +158,6 @@ export const useCartStore = defineStore(
       try {
         await addCartApi({ carId: car.id, startDate, endDate, days })
         await initCart()
-        // 新加入的商品默认选中
-        if (!selectedIds.value.includes(car.id)) {
-          selectedIds.value.push(car.id)
-        }
         await refreshPrices()
         return true
       } catch (e) {
