@@ -287,9 +287,9 @@ onBeforeUnmount(stopCountdown)
     display: flex;
     gap: $space-base;
     padding: $space-base;
-    border: 1px solid var(--border-color, #e4e4e7);
+    border: 1px solid var(--lux-border);
     border-radius: 8px;
-    background: var(--card-bg, #fff);
+    background: var(--lux-bg-gray);
 
     .v-img {
       width: 160px;

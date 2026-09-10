@@ -361,6 +361,53 @@ html.dark {
   background-color: var(--lux-bg);
 }
 
+// DatePicker 下拉面板 + 范围区间条（暗色/亮色适配）
+.el-picker-panel {
+  background-color: var(--lux-bg-gray) !important;
+  color: var(--lux-text) !important;
+  border-color: var(--lux-border) !important;
+  --el-datepicker-cell-focus-background-color: var(--lux-bg-gray-dark) !important;
+  --el-datepicker-inrange-bg-color: rgba(218, 41, 28, 0.32) !important;
+  --el-datepicker-inrange-hover-bg-color: rgba(218, 41, 28, 0.45) !important;
+  --el-datepicker-active-color: #{$color-primary} !important;
+  --el-datepicker-hover-text-color: #{$color-primary} !important;
+  --el-datepicker-inrange-hover-text-color: #fff !important;
+  --el-datepicker-disabled-text-color: var(--lux-text-tertiary) !important;
+
+  .el-date-table th { color: var(--lux-text-secondary) !important; }
+  // 当前选中日期（起/止端点）：实心品牌红底 + 白字
+  .el-date-table td.start-date .el-date-table-cell__text,
+  .el-date-table td.end-date .el-date-table-cell__text {
+    color: #fff !important;
+    background-color: $color-primary !important;
+    border-radius: 4px;
+  }
+  .el-date-table td .el-date-table-cell__text { color: var(--lux-text) !important; }
+  // 区间内天数：区间轴用较深的半透明红（暗色画布上形成清晰色带），
+  // 日期文字固定白字并移除外框背景，保证数字清晰可见、不被色带遮挡。
+  // 说明：原实现把区间格背景直接置透明，色带会被彻底删除；这里保留半透明红条，
+  // 既保留"已选区间"的视觉指示，又因暗红底+白字对比足够而不再遮挡日期。
+  .el-date-table td.in-range .el-date-table-cell {
+    box-shadow: none !important;
+  }
+  .el-date-table td.in-range .el-date-table-cell__text {
+    color: #fff !important;
+    background-color: transparent !important;
+  }
+  .el-date-table td.next-month .el-date-table-cell__text,
+  .el-date-table td.prev-month .el-date-table-cell__text { color: var(--lux-text-tertiary) !important; }
+}
+
+// 亮色模式下区间条恢复浅色红，文字深色以保证对比
+html.light {
+  .el-picker-panel {
+    --el-datepicker-inrange-bg-color: rgba(218, 41, 28, 0.10) !important;
+    --el-datepicker-inrange-hover-bg-color: rgba(218, 41, 28, 0.16) !important;
+    // 亮色下浅红底配深色字，对比充足，覆盖暗色块的「白字」规则
+    .el-date-table td.in-range .el-date-table-cell__text { color: var(--lux-text) !important; }
+  }
+}
+
 // Select 下拉面板（同样 teleport 到 body）
 .el-select-dropdown {
   background-color: var(--lux-bg-gray) !important;
@@ -375,17 +422,6 @@ html.dark {
       font-weight: $font-weight-medium;
     }
   }
-}
-
-// DatePicker 下拉面板
-.el-picker-panel {
-  background-color: var(--lux-bg-gray) !important;
-  color: var(--lux-text) !important;
-  border-color: var(--lux-border) !important;
-  .el-date-table th { color: var(--lux-text-secondary) !important; }
-  .el-date-table td .el-date-table-cell__text { color: var(--lux-text) !important; }
-  .el-date-table td.next-month .el-date-table-cell__text,
-  .el-date-table td.prev-month .el-date-table-cell__text { color: var(--lux-text-tertiary) !important; }
 }
 
 // MessageBox / Message

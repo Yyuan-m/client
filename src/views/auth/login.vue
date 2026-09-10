@@ -63,7 +63,10 @@ const formRef = ref()
 const loading = ref(false)
 const remember = ref(storage.get('lux_remember_login', false))
 
-const form = reactive({ username: storage.get('lux_saved_username', ''), password: '' })
+const form = reactive({
+  username: storage.get('lux_saved_username', ''),
+  password: remember.value ? storage.get('lux_saved_password', '') : ''
+})
 const rules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
@@ -80,8 +83,10 @@ async function handleLogin() {
     await userStore.login(form)
     if (remember.value) {
       storage.set('lux_saved_username', form.username)
+      storage.set('lux_saved_password', form.password)
     } else {
       storage.remove('lux_saved_username')
+      storage.remove('lux_saved_password')
     }
     storage.set('lux_remember_login', remember.value)
     ElMessage.success('登录成功')
