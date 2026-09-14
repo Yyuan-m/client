@@ -267,6 +267,8 @@ const cardClass = computed(() => {
   } else {
     // 领券中心：已过期/已领完置灰
     if (isExpired.value || isSoldOut.value) cls.push('disabled')
+    // 已领取的券置灰，提示用户已领取过
+    else if (props.claimed) cls.push('claimed')
   }
   return cls.join(' ')
 })
@@ -303,6 +305,21 @@ const isSoldOut = computed(() => {
   }
   &.disabled {
     opacity: 0.55;
+    &:hover { transform: none; border-color: $color-border; }
+  }
+  // 已领取置灰：面额区去饱和 + 文字变灰，提示已领取过
+  // 注意：不能对整卡施加 filter/opacity，否则 hover 展开的详情浮层(.cmp-extra)边框也会被去饱和/变透明
+  &.claimed {
+    border-color: $color-border;
+
+    // 仅对面额区去饱和（compact 的 .cmp-value-area / 经典 .coupon-left）
+    .cmp-value-area, .coupon-left { filter: grayscale(1); }
+    .coupon-value { color: #999; }
+    .coupon-name { color: $color-text-tertiary; }
+
+    // hover 浮层与置灰风格保持一致：去掉红边框线
+    .cmp-extra { border: none; }
+
     &:hover { transform: none; border-color: $color-border; }
   }
 }
