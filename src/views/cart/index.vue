@@ -263,7 +263,10 @@ const rentRuleMap = reactive({})
 // 当前改期车辆的起租规则（未加载完成时用默认值占位）
 const editRule = computed(() => {
   const carId = editTarget.value?.carId
-  return rentRuleMap[carId] || { minDays: 1, maxDays: null, availableDate: null }
+  const rule = rentRuleMap[carId] || { minDays: 1, maxDays: null, availableDate: null }
+  // minDate 优先用可用性接口的"今天起第一个空闲日"（精确区间配套），回退详情 availableDate
+  const avail = availabilityMap[carId]?.availableDate
+  return { ...rule, availableDate: avail || rule.availableDate }
 })
 
 /**

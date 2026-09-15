@@ -130,7 +130,7 @@
                 <el-icon><WarningFilled /></el-icon>
                 <span>{{ rentedNotice }}</span>
               </div>
-              <DateRentPicker v-model="dateRange" :min-days="effectiveMinDays" :max-days="effectiveMaxDays" :min-date="car.availableDate" @change="onDateChange" />
+              <DateRentPicker v-model="dateRange" :min-days="effectiveMinDays" :max-days="effectiveMaxDays" :min-date="minRentDate" :disabled-date-fn="isDateUnavailable" @change="onDateChange" />
               <div v-if="rentDays > 0" class="rent-summary">
                 <!-- 价格加载中 -->
                 <div v-if="priceLoading" class="price-loading">
@@ -205,7 +205,7 @@ import PageSkeleton from '@/components/PageSkeleton/index.vue'
 import EmptyTips from '@/components/EmptyTips/index.vue'
 import DateRentPicker from '@/components/DateRentPicker/index.vue'
 import { useScrollReveal } from '@/composables/useScrollReveal'
-import { getCarDetailApi, getCarImagesApi } from '@/api/modules/car'
+import { getCarDetailApi, getCarImagesApi, getCarAvailabilityApi } from '@/api/modules/car'
 import { calcCarPriceApi } from '@/api/modules/price'
 import { useAppStore, useUserStore, useCartStore } from '@/stores'
 import { moneyUtil, dateUtil } from '@/utils'
@@ -226,6 +226,10 @@ const rentDays = ref(0)
 // 价格明细（来自后端 PriceService，确保与下单一致）
 const priceDetail = ref(null)
 const priceLoading = ref(false)
+
+// 车辆可用性：精确不可选区间（已租出+整备期，闭区间），用于日历禁用与提交前校验
+const unavailableRanges = ref([])
+const availabilityAvailableDate = ref(null)
 
 // 车辆素材图片（按分类分组，来自 car_rental.car_image 表）
 const imageGroups = ref([])
@@ -337,6 +341,8 @@ const rentedNotice = computed(() => {
   if (!c) return ''
   // 仅在有占用订单（availableDate 存在）时提示；纯 status=rented 但无订单数据时不展示
   if (!c.availableDate) return ''
+  // 今天空闲（仅有未来预约）：提示可租今天起，具体禁用区间见日历
+  if (c.status === 'available') return '该车已有未来预约，请选择日历中可选日期租车'
   return `该车已被预约，最早可于 ${c.availableDate} 起租（含 2 天整备期）`
 })
 
@@ -345,6 +351,38 @@ const rentButtonText = computed(() => isRented.value ? '预约租车' : '立即�
 
 function onDateChange({ days, valid }) {
   rentDays.value = valid ? days : 0
+}
+
+// ===== 车辆可用性（精确禁用已租出/整备区间）=====
+
+// 日历最小可起租日：优先用可用性接口的"今天起第一个空闲日"，回退车辆详情的 availableDate
+const minRentDate = computed(() => availabilityAvailableDate.value || car.value?.availableDate || null)
+
+// 某日期是否落在不可选区间（已租出+整备期，闭区间）内
+function isDateUnavailable(date) {
+  if (!unavailableRanges.value.length) return false
+  const ymd = dateUtil.format(date, 'YYYY-MM-DD')
+  return unavailableRanges.value.some((r) => r.startDate <= ymd && ymd <= r.endDate)
+}
+
+// 所选租期与不可选区间重叠校验：返回冲突时的提示文案，无冲突返回空串
+function rangeConflictMessage() {
+  const [start, end] = dateRange.value || []
+  if (!start || !end || !unavailableRanges.value.length) return ''
+  const conflict = unavailableRanges.value.some((r) => start <= r.endDate && end >= r.startDate)
+  return conflict ? '所选租期与该车辆已有预约/整备时间冲突，请调整日期' : ''
+}
+
+// 拉取车辆可用性（精确不可选区间 + 最早空闲日）
+async function loadAvailability() {
+  if (!car.value?.id) return
+  try {
+    const av = await getCarAvailabilityApi(car.value.id)
+    unavailableRanges.value = av?.unavailableRanges || []
+    availabilityAvailableDate.value = av?.availableDate || null
+  } catch (e) {
+    console.error('车辆可用性加载失败', e)
+  }
 }
 
 // 租期校验错误信息：已选日期但无效时给出准确原因（不足最少天数 / 超过最大租期）
@@ -426,6 +464,12 @@ async function goCheckout() {
     ElMessage.warning(rentErrorMsg.value || '请选择租车日期')
     return
   }
+  // 所选租期与已有预约/整备期冲突校验（日历已禁用，此处防手动输入绕过）
+  const conflictMsg = rangeConflictMessage()
+  if (conflictMsg) {
+    ElMessage.warning(conflictMsg)
+    return
+  }
   // 已出租车辆：校验起租日期不早于最早可租日期
   if (!checkAvailableDate()) return
   // 等待价格加载完成，确保下单价格已计算
@@ -447,6 +491,12 @@ async function addToCart() {
   if (rentDays.value === 0) {
     // 已选日期但无效时给出准确原因；未选日期时提示先选日期
     ElMessage.warning(rentErrorMsg.value || (effectiveMinDays.value > 1 ? `请选择租车日期，需至少租 ${effectiveMinDays.value} 天起` : '请选择租车日期'))
+    return
+  }
+  // 所选租期与已有预约/整备期冲突校验（日历已禁用，此处防手动输入绕过）
+  const conflictMsg = rangeConflictMessage()
+  if (conflictMsg) {
+    ElMessage.warning(conflictMsg)
     return
   }
   // 已出租车辆：校验起租日期不早于最早可租日期
@@ -485,6 +535,8 @@ async function loadDetail() {
     ])
     car.value = detail
     imageGroups.value = groups || []
+    // 拉取精确可用性（不可选区间 + 最早空闲日），供日历禁用与提交前校验
+    loadAvailability()
   } catch (e) {
     console.error('车辆详情加载失败', e)
   } finally {
