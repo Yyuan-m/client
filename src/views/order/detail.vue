@@ -48,7 +48,8 @@
         </div>
 
         <el-descriptions :column="2" border class="amount-block">
-          <el-descriptions-item label="日租金">￥{{ moneyUtil.format(order.dailyPrice) }}/天</el-descriptions-item>
+          <!-- 多车时各车日租金不同，已在车辆明细中逐车标清，汇总区不再展示单车日租金 -->
+          <el-descriptions-item v-if="!(order.items && order.items.length > 1)" label="日租金">￥{{ moneyUtil.format(order.dailyPrice) }}/天</el-descriptions-item>
           <el-descriptions-item label="租金合计">￥{{ moneyUtil.format(order.rentAmount) }}</el-descriptions-item>
           <el-descriptions-item v-if="order.couponName" label="使用优惠券">{{ order.couponName }}</el-descriptions-item>
           <el-descriptions-item v-if="order.couponDiscount > 0" label="优惠券抵扣"><span class="discount-text">-￥{{ moneyUtil.format(order.couponDiscount) }}</span></el-descriptions-item>
@@ -346,5 +347,9 @@ onBeforeUnmount(stopCountdown)
   display: flex;
   gap: $space-base;
   justify-content: center;
+}
+
+.amount-block {
+  margin-top: $space-xs;
 }
 </style>

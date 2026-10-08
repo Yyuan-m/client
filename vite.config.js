@@ -38,6 +38,10 @@ export default defineConfig({
     port: 3000,
     open: true,
     host: true,
+    allowedHosts: [
+      '72299b2f.r26.cpolar.top' ,
+      '.cpolar.top' // 允许 cpolar 所有临时域名，免去每次改
+    ],
     proxy: {
       '/api': {
         target: 'http://localhost:8089',
